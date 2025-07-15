@@ -1,0 +1,1553 @@
+#!/usr/bin/env python3
+"""
+Selfie Booth Application
+A web-based selfie booth that validates users and sends photos via SMS/email
+"""
+
+import os
+import random
+import sqlite3
+import smtplib
+import base64
+from datetime import datetime, timedelta
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.mime.image import MIMEImage
+from flask import Flask, render_template_string, request, jsonify, session, redirect
+from werkzeug.utils import secure_filename
+import secrets
+
+app = Flask(__name__)
+app.secret_key = secrets.token_hex(16)
+app.config['UPLOAD_FOLDER'] = 'photos'
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+
+# Ensure upload directory exists
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+
+# Database setup
+def init_db():
+    conn = sqlite3.connect('selfie_booth.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS sessions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id TEXT UNIQUE,
+            phone TEXT,
+            first_name TEXT,
+            email TEXT,
+            verification_code TEXT,
+            verified BOOLEAN DEFAULT FALSE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            photo_path TEXT
+        )
+    ''')
+    conn.commit()
+    conn.close()
+
+def cleanup_old_sessions():
+    """Remove sessions older than 30 minutes to prevent database buildup"""
+    conn = sqlite3.connect('selfie_booth.db')
+    cursor = conn.cursor()
+    
+    # Delete sessions older than 30 minutes (but keep recent ones for debugging)
+    thirty_minutes_ago = datetime.now() - timedelta(minutes=30)
+    cursor.execute('''
+        SELECT COUNT(*) FROM sessions WHERE created_at < ?
+    ''', (thirty_minutes_ago.isoformat(),))
+    old_count = cursor.fetchone()[0]
+    
+    if old_count > 0:
+        cursor.execute('''
+            DELETE FROM sessions WHERE created_at < ?
+        ''', (thirty_minutes_ago.isoformat(),))
+        
+        deleted_count = cursor.rowcount
+        conn.commit()
+        print(f"🧹 Cleaned up {deleted_count} old sessions (older than 30 minutes)")
+    
+    conn.close()
+
+# Messaging Interface - Easy to swap implementations
+class MessagingService:
+    def send_photo(self, phone, photo_data, message):
+        raise NotImplementedError
+
+class TwilioService(MessagingService):
+    def __init__(self, account_sid=None, auth_token=None, from_number=None):
+        self.account_sid = account_sid or os.getenv('TWILIO_ACCOUNT_SID')
+        self.auth_token = auth_token or os.getenv('TWILIO_AUTH_TOKEN')
+        self.from_number = from_number or os.getenv('TWILIO_FROM_NUMBER')
+        
+    def send_photo(self, phone, photo_data, message):
+        try:
+            from twilio.rest import Client
+            client = Client(self.account_sid, self.auth_token)
+            
+            # Save photo temporarily for Twilio
+            temp_path = f"temp_{datetime.now().timestamp()}.jpg"
+            with open(temp_path, 'wb') as f:
+                f.write(photo_data)
+            
+            # Send MMS
+            message = client.messages.create(
+                body=message,
+                media_url=[f"file://{os.path.abspath(temp_path)}"],
+                from_=self.from_number,
+                to=phone
+            )
+            
+            # Cleanup
+            os.remove(temp_path)
+            return True, f"Photo sent via Twilio: {message.sid}"
+        except Exception as e:
+            return False, f"Twilio error: {str(e)}"
+
+class EmailService(MessagingService):
+    def __init__(self, smtp_server="smtp.gmail.com", smtp_port=587, email=None, password=None):
+        self.smtp_server = smtp_server
+        self.smtp_port = smtp_port
+        self.email = email or os.getenv('EMAIL_ADDRESS')
+        self.password = password or os.getenv('EMAIL_PASSWORD')
+        
+    def send_photo(self, recipient_email, photo_data, message):
+        try:
+            msg = MIMEMultipart()
+            msg['From'] = self.email
+            msg['To'] = recipient_email
+            msg['Subject'] = "Your Selfie Booth Photo!"
+            
+            # Add text
+            msg.attach(MIMEText(message, 'plain'))
+            
+            # Add photo
+            img = MIMEImage(photo_data)
+            img.add_header('Content-Disposition', 'attachment', filename='selfie.jpg')
+            msg.attach(img)
+            
+            # Send
+            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
+                server.starttls()
+                server.login(self.email, self.password)
+                server.send_message(msg)
+            
+            return True, "Photo sent via email"
+        except Exception as e:
+            return False, f"Email error: {str(e)}"
+
+class LocalStorageService(MessagingService):
+    def send_photo(self, identifier, photo_data, message):
+        try:
+            filename = f"photo_{identifier}_{datetime.now().timestamp()}.jpg"
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+            
+            with open(filepath, 'wb') as f:
+                f.write(photo_data)
+            
+            return True, f"Photo saved locally: {filepath}"
+        except Exception as e:
+            return False, f"Local storage error: {str(e)}"
+
+# Configure messaging service (change this to switch platforms)
+def get_messaging_service():
+    service_type = os.getenv('MESSAGING_SERVICE', 'local')  # local, twilio, email
+    
+    if service_type == 'twilio':
+        return TwilioService()
+    elif service_type == 'email':
+        return EmailService()
+    else:
+        return LocalStorageService()
+
+# HTML Templates
+KIOSK_PAGE = '''
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Selfie Booth - Kiosk</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+        .kiosk-container {
+            background: white;
+            padding: 60px;
+            border-radius: 30px;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.2);
+            max-width: 800px;
+            width: 90%;
+        }
+        h1 {
+            color: #333;
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+        .subtitle {
+            color: #666;
+            font-size: 24px;
+            margin-bottom: 40px;
+        }
+        .qr-section {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 60px;
+            margin: 40px 0;
+        }
+        .qr-code {
+            width: 250px;
+            height: 250px;
+            background: #f8f9fa;
+            border: 3px solid #667eea;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            color: #667eea;
+        }
+        .instructions {
+            max-width: 300px;
+        }
+        .step {
+            background: #f8f9fa;
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 15px;
+            border-left: 5px solid #667eea;
+        }
+        .step-number {
+            background: #667eea;
+            color: white;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 10px;
+            font-weight: bold;
+        }
+        .url-section {
+            margin-top: 40px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 15px;
+        }
+        .url {
+            font-size: 32px;
+            font-weight: bold;
+            color: #667eea;
+            margin-top: 10px;
+        }
+        .footer {
+            margin-top: 30px;
+            color: #888;
+            font-size: 16px;
+        }
+        .trigger-btn {
+            background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: transform 0.2s;
+            margin: 10px;
+        }
+        .trigger-btn:hover {
+            transform: translateY(-2px);
+        }
+        .debug-info {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            max-width: 300px;
+        }
+    </style>
+</head>
+<body>
+    <div class="debug-info">
+        Status: {{ debug_status }}<br>
+        Last cleanup: {{ last_cleanup }}<br>
+        Time: {{ current_time }}
+    </div>
+    
+    <div class="kiosk-container">
+        <h1>📸 Selfie Booth</h1>
+        <div class="subtitle">Get your photo taken and sent to your phone!</div>
+        
+        <div class="qr-section">
+            <div class="qr-code">
+                <div>
+                    <div>QR Code</div>
+                    <div style="font-size: 14px; margin-top: 10px;">
+                        Scan with your phone camera
+                    </div>
+                </div>
+            </div>
+            
+            <div class="instructions">
+                <div class="step">
+                    <span class="step-number">1</span>
+                    <strong>Scan QR Code</strong><br>
+                    Use your phone camera to scan the QR code
+                </div>
+                <div class="step">
+                    <span class="step-number">2</span>
+                    <strong>Enter Your Info</strong><br>
+                    Fill out the form on your phone
+                </div>
+                <div class="step">
+                    <span class="step-number">3</span>
+                    <strong>Enter Code</strong><br>
+                    Type the code shown on this screen
+                </div>
+                <div class="step">
+                    <span class="step-number">4</span>
+                    <strong>Smile!</strong><br>
+                    Look at the camera and smile for your photo
+                </div>
+            </div>
+        </div>
+        
+        <div class="url-section">
+            <div>Or visit directly:</div>
+            <div class="url">{{ base_url }}/mobile</div>
+        </div>
+        
+        <div class="footer">
+            Photos will be sent to your phone via text message
+            <div style="margin-top: 20px;">
+                <button id="triggerPhoto" class="trigger-btn">📸 Trigger Photo (Manual)</button>
+                <button id="resetSessions" class="trigger-btn" style="background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);">🔄 Reset Sessions</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Auto-refresh every 3 seconds to check for new registrations (faster refresh)
+        setTimeout(() => {
+            location.reload();
+        }, 3000);
+
+        // Manual photo trigger (for testing or manual operation)
+        document.getElementById('triggerPhoto').addEventListener('click', async () => {
+            try {
+                const response = await fetch('/trigger_photo', { method: 'POST' });
+                const result = await response.json();
+                
+                if (result.success) {
+                    // Redirect to camera page if user is verified
+                    if (result.redirect) {
+                        window.location.href = result.redirect;
+                    }
+                } else {
+                    alert('No verified user ready for photo. Please complete mobile registration first.');
+                }
+            } catch (error) {
+                alert('Error triggering photo');
+            }
+        });
+
+        // Reset sessions button (for debugging)
+        document.getElementById('resetSessions').addEventListener('click', async () => {
+            if (confirm('Are you sure you want to reset all sessions? This will clear all pending registrations.')) {
+                try {
+                    const response = await fetch('/admin/reset_sessions', { method: 'POST' });
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        alert('Sessions reset successfully!');
+                        location.reload();
+                    } else {
+                        alert('Error resetting sessions: ' + result.error);
+                    }
+                } catch (error) {
+                    alert('Error resetting sessions');
+                }
+            }
+        });
+
+        // Manual refresh button for debugging
+        function manualRefresh() {
+            console.log('Manual refresh triggered');
+            location.reload();
+        }
+        
+        // Add manual refresh button for debugging
+        document.addEventListener('DOMContentLoaded', () => {
+            const debugDiv = document.querySelector('.debug-info');
+            if (debugDiv) {
+                const refreshBtn = document.createElement('button');
+                refreshBtn.textContent = '🔄 Refresh Now';
+                refreshBtn.style.cssText = 'background: #667eea; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; margin-top: 10px; display: block; width: 100%;';
+                refreshBtn.onclick = manualRefresh;
+                debugDiv.appendChild(refreshBtn);
+            }
+        });
+    </script>
+</body>
+</html>
+'''
+
+MOBILE_PAGE = '''
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Selfie Booth - Mobile</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            max-width: 400px;
+            width: 100%;
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-weight: bold;
+        }
+        input[type="text"], input[type="tel"], input[type="email"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        input[type="text"]:focus, input[type="tel"]:focus, input[type="email"]:focus {
+            border-color: #667eea;
+            outline: none;
+        }
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+        .checkbox-group input {
+            margin-right: 10px;
+        }
+        .submit-btn {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .submit-btn:hover {
+            transform: translateY(-2px);
+        }
+        .error {
+            color: #e74c3c;
+            margin-top: 10px;
+            text-align: center;
+        }
+        .instruction {
+            background: #e8f4f8;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 20px;
+            border-left: 4px solid #667eea;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📸 Selfie Booth</h1>
+        <div class="instruction">
+            <strong>Step 2:</strong> After submitting this form, look at the kiosk screen - your verification code will appear there.
+        </div>
+        <form id="userForm">
+            <div class="form-group">
+                <label for="firstName">First Name *</label>
+                <input type="text" id="firstName" name="firstName" required>
+            </div>
+            <div class="form-group">
+                <label for="phone">Phone Number *</label>
+                <input type="tel" id="phone" name="phone" placeholder="(555) 123-4567" required>
+            </div>
+            <div class="form-group">
+                <label for="email">Email Address (Optional)</label>
+                <input type="email" id="email" name="email">
+            </div>
+            <div class="checkbox-group">
+                <input type="checkbox" id="consent" name="consent" required>
+                <label for="consent">I agree to receive text messages</label>
+            </div>
+            <button type="submit" class="submit-btn">Start Photo Session</button>
+            <div id="error" class="error"></div>
+        </form>
+    </div>
+
+    <script>
+        document.getElementById('userForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const formData = new FormData(e.target);
+            const data = Object.fromEntries(formData);
+            
+            try {
+                const response = await fetch('/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    window.location.href = '/verify';
+                } else {
+                    document.getElementById('error').textContent = result.error;
+                }
+            } catch (error) {
+                document.getElementById('error').textContent = 'Something went wrong. Please try again.';
+            }
+        });
+    </script>
+</body>
+</html>
+'''
+
+KIOSK_VERIFICATION_PAGE = '''
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verification Code - Selfie Booth</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+        }
+        .verification-container {
+            background: white;
+            padding: 80px;
+            border-radius: 30px;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.2);
+            max-width: 800px;
+            width: 90%;
+        }
+        h1 {
+            color: #333;
+            font-size: 42px;
+            margin-bottom: 20px;
+        }
+        .user-greeting {
+            color: #667eea;
+            font-size: 28px;
+            margin-bottom: 40px;
+        }
+        .code-display {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 60px;
+            border-radius: 25px;
+            margin: 40px 0;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        }
+        .code {
+            font-size: 96px;
+            font-weight: bold;
+            letter-spacing: 20px;
+            margin: 20px 0;
+        }
+        .code-label {
+            font-size: 24px;
+            margin-bottom: 10px;
+            opacity: 0.9;
+        }
+        .instructions {
+            font-size: 24px;
+            color: #555;
+            margin-top: 40px;
+            line-height: 1.6;
+        }
+        .highlight {
+            background: #fff3cd;
+            padding: 4px 8px;
+            border-radius: 5px;
+            color: #856404;
+        }
+        .back-link {
+            position: absolute;
+            top: 30px;
+            left: 30px;
+            background: rgba(255,255,255,0.2);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 25px;
+            text-decoration: none;
+            font-size: 16px;
+        }
+        .back-link:hover {
+            background: rgba(255,255,255,0.3);
+        }
+        .expires-in {
+            font-size: 18px;
+            color: #e74c3c;
+            margin-top: 20px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <a href="/" class="back-link">← Back to Start</a>
+    
+    <div class="verification-container">
+        <h1>📱 Verification Required</h1>
+        <div class="user-greeting">Hi {{ name }}!</div>
+        
+        <div class="code-display">
+            <div class="code-label">Enter this code on your phone:</div>
+            <div class="code">{{ code }}</div>
+            <div class="expires-in" id="countdown">Expires in 2:00</div>
+        </div>
+        
+        <div class="instructions">
+            <p>📱 Go to your phone and enter the <span class="highlight">6-digit code</span> shown above</p>
+            <p>⏰ This code will expire in 2 minutes</p>
+        </div>
+    </div>
+
+    <script>
+        // Countdown timer
+        let timeLeft = 120; // 2 minutes in seconds
+        const countdownEl = document.getElementById('countdown');
+        
+        const timer = setInterval(() => {
+            const minutes = Math.floor(timeLeft / 60);
+            const seconds = timeLeft % 60;
+            countdownEl.textContent = `Expires in ${minutes}:${seconds.toString().padStart(2, '0')}`;
+            
+            if (timeLeft <= 0) {
+                clearInterval(timer);
+                countdownEl.textContent = 'Code expired';
+                countdownEl.style.color = '#e74c3c';
+                // Auto-refresh to go back to start
+                setTimeout(() => {
+                    window.location.href = '/';
+                }, 2000);
+            }
+            timeLeft--;
+        }, 1000);
+        
+        // Auto-refresh every 5 seconds to check verification status
+        setTimeout(() => {
+            location.reload();
+        }, 5000);
+    </script>
+</body>
+</html>
+'''
+
+KIOSK_CAMERA_PAGE = '''
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Take Your Photo - Selfie Booth</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        .greeting {
+            background: white;
+            padding: 30px 60px;
+            border-radius: 25px;
+            margin-bottom: 30px;
+            text-align: center;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+        }
+        .greeting h1 {
+            color: #667eea;
+            margin: 0;
+            font-size: 48px;
+        }
+        .camera-container {
+            background: white;
+            padding: 40px;
+            border-radius: 30px;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.2);
+            text-align: center;
+            max-width: 900px;
+            width: 90%;
+        }
+        #video {
+            width: 100%;
+            max-width: 700px;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        }
+        #canvas {
+            display: none;
+        }
+        #photoDisplay {
+            display: none;
+            max-width: 700px;
+            width: 100%;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+        }
+        .countdown {
+            font-size: 120px;
+            font-weight: bold;
+            color: #e74c3c;
+            margin: 30px 0;
+            min-height: 140px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .controls {
+            margin-top: 30px;
+        }
+        .photo-btn {
+            padding: 25px 50px;
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+            color: white;
+            border: none;
+            border-radius: 15px;
+            font-size: 28px;
+            cursor: pointer;
+            margin: 15px;
+            transition: transform 0.2s;
+        }
+        .photo-btn:hover {
+            transform: translateY(-3px);
+        }
+        .photo-btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .status {
+            margin-top: 30px;
+            font-size: 28px;
+            font-weight: bold;
+        }
+        .success {
+            color: #27ae60;
+        }
+        .error {
+            color: #e74c3c;
+        }
+        .photo-countdown {
+            font-size: 32px;
+            color: #667eea;
+            margin-top: 20px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="greeting">
+        <h1>Hi {{ name }}, smile for the camera! 📸</h1>
+    </div>
+    
+    <div class="camera-container">
+        <video id="video" autoplay playsinline></video>
+        <canvas id="canvas"></canvas>
+        <img id="photoDisplay" alt="Your photo">
+        <div id="countdown" class="countdown"></div>
+        <div class="controls">
+            <button id="photoBtn" class="photo-btn">Take Photo</button>
+        </div>
+        <div id="status" class="status"></div>
+        <div id="photoCountdown" class="photo-countdown"></div>
+    </div>
+
+    <script>
+        let video, canvas, ctx, photoDisplay;
+        let countdownInterval;
+        const sessionId = "{{ session_id }}";
+        
+        async function initCamera() {
+            video = document.getElementById('video');
+            canvas = document.getElementById('canvas');
+            photoDisplay = document.getElementById('photoDisplay');
+            ctx = canvas.getContext('2d');
+            
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { width: 1280, height: 720 } 
+                });
+                video.srcObject = stream;
+            } catch (err) {
+                document.getElementById('status').innerHTML = '<div class="error">Camera access denied. Please allow camera access and refresh.</div>';
+            }
+        }
+        
+        function startCountdown() {
+            let count = 5;
+            const countdownEl = document.getElementById('countdown');
+            const photoBtn = document.getElementById('photoBtn');
+            
+            photoBtn.disabled = true;
+            
+            countdownInterval = setInterval(() => {
+                countdownEl.textContent = count;
+                
+                if (count === 0) {
+                    clearInterval(countdownInterval);
+                    countdownEl.textContent = 'Say Cheese! 📸';
+                    setTimeout(() => {
+                        takePhoto();
+                    }, 500);
+                }
+                count--;
+            }, 1000);
+        }
+        
+        async function takePhoto() {
+            const countdownEl = document.getElementById('countdown');
+            const statusEl = document.getElementById('status');
+            const photoCountdownEl = document.getElementById('photoCountdown');
+            
+            // Set canvas size to match video
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            
+            // Draw the frame
+            ctx.drawImage(video, 0, 0);
+            
+            // Get the image data URL
+            const imageDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+            
+            // Hide video and show photo
+            video.style.display = 'none';
+            photoDisplay.src = imageDataUrl;
+            photoDisplay.style.display = 'block';
+            
+            // Convert to blob for upload
+            canvas.toBlob(async (blob) => {
+                const formData = new FormData();
+                formData.append('photo', blob, 'selfie.jpg');
+                formData.append('session_id', sessionId);
+                
+                countdownEl.textContent = '';
+                statusEl.innerHTML = '<div class="success">📱 Sending your photo...</div>';
+                
+                try {
+                    const response = await fetch('/upload_photo', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        statusEl.innerHTML = '<div class="success">📱 Photo sent! Check your messages.</div>';
+                        
+                        // Start 5-second countdown before returning to kiosk
+                        let photoCount = 5;
+                        const photoCountdownInterval = setInterval(() => {
+                            photoCountdownEl.textContent = `Returning to start in ${photoCount} seconds...`;
+                            
+                            if (photoCount === 0) {
+                                clearInterval(photoCountdownInterval);
+                                window.location.href = '/';
+                            }
+                            photoCount--;
+                        }, 1000);
+                        
+                    } else {
+                        statusEl.innerHTML = '<div class="error">Failed to send photo: ' + result.error + '</div>';
+                        // Reset to camera view on error
+                        video.style.display = 'block';
+                        photoDisplay.style.display = 'none';
+                        document.getElementById('photoBtn').disabled = false;
+                    }
+                } catch (error) {
+                    statusEl.innerHTML = '<div class="error">Something went wrong. Please try again.</div>';
+                    // Reset to camera view on error
+                    video.style.display = 'block';
+                    photoDisplay.style.display = 'none';
+                    document.getElementById('photoBtn').disabled = false;
+                }
+            }, 'image/jpeg', 0.8);
+        }
+        
+        document.getElementById('photoBtn').addEventListener('click', startCountdown);
+        
+        // Initialize camera when page loads
+        initCamera();
+        
+        // Auto-start photo after 3 seconds (optional - remove if you want manual trigger only)
+        setTimeout(() => {
+            if (!document.getElementById('photoBtn').disabled) {
+                startCountdown();
+            }
+        }, 3000);
+    </script>
+</body>
+</html>
+'''
+
+VERIFY_PAGE = '''
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enter Verification Code - Selfie Booth</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .instruction {
+            background: #e8f4f8;
+            padding: 20px;
+            border-radius: 15px;
+            margin: 20px 0;
+            border-left: 4px solid #667eea;
+            font-size: 16px;
+            text-align: left;
+        }
+        .kiosk-icon {
+            font-size: 48px;
+            margin: 20px 0;
+        }
+        .code-input {
+            font-size: 32px;
+            text-align: center;
+            padding: 20px;
+            border: 3px solid #ddd;
+            border-radius: 15px;
+            width: 250px;
+            margin: 30px 0;
+            letter-spacing: 8px;
+            font-weight: bold;
+        }
+        .code-input:focus {
+            border-color: #667eea;
+            outline: none;
+        }
+        .verify-btn {
+            padding: 15px 40px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 18px;
+            cursor: pointer;
+            margin: 20px 0;
+            transition: transform 0.2s;
+        }
+        .verify-btn:hover {
+            transform: translateY(-2px);
+        }
+        .verify-btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .error {
+            color: #e74c3c;
+            margin-top: 15px;
+            font-weight: bold;
+        }
+        .success {
+            color: #27ae60;
+            margin-top: 15px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📱 Enter Verification Code</h1>
+        
+        <div class="kiosk-icon">🖥️</div>
+        
+        <div class="instruction">
+            <strong>Look at the kiosk screen now</strong> - your 6-digit verification code should be displayed there. Enter it below.
+        </div>
+        
+        <form id="verifyForm">
+            <input type="text" 
+                   id="codeInput" 
+                   class="code-input" 
+                   maxlength="6" 
+                   placeholder="000000" 
+                   required
+                   autocomplete="off">
+            <br>
+            <button type="submit" class="verify-btn" id="verifyBtn">Verify Code</button>
+            <div id="message"></div>
+        </form>
+    </div>
+
+    <script>
+        const codeInput = document.getElementById('codeInput');
+        const verifyBtn = document.getElementById('verifyBtn');
+        const form = document.getElementById('verifyForm');
+        
+        // Auto-focus on input
+        codeInput.focus();
+        
+        // Format input as user types
+        codeInput.addEventListener('input', (e) => {
+            e.target.value = e.target.value.replace(/\\D/g, ''); // Only numbers
+            
+            // Auto-submit when 6 digits are entered
+            if (e.target.value.length === 6) {
+                form.dispatchEvent(new Event('submit'));
+            }
+        });
+        
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const code = codeInput.value;
+            
+            if (code.length !== 6) {
+                document.getElementById('message').innerHTML = '<div class="error">Please enter a 6-digit code</div>';
+                return;
+            }
+            
+            verifyBtn.disabled = true;
+            verifyBtn.textContent = 'Verifying...';
+            
+            try {
+                const response = await fetch('/verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    document.getElementById('message').innerHTML = '<div class="success">✅ Code verified! Look at the kiosk screen - your photo session is starting!</div>';
+                    // Don't redirect - let the kiosk handle the camera
+                } else {
+                    document.getElementById('message').innerHTML = '<div class="error">❌ ' + result.error + '</div>';
+                    verifyBtn.disabled = false;
+                    verifyBtn.textContent = 'Verify Code';
+                    codeInput.focus();
+                    codeInput.select();
+                }
+            } catch (error) {
+                document.getElementById('message').innerHTML = '<div class="error">❌ Something went wrong. Please try again.</div>';
+                verifyBtn.disabled = false;
+                verifyBtn.textContent = 'Verify Code';
+            }
+        });
+    </script>
+</body>
+</html>
+'''
+
+# Routes
+@app.route('/')
+def kiosk():
+    """Kiosk display page - shows QR code, verification code, or camera"""
+    # Clean up old sessions first
+    cleanup_old_sessions()
+    
+    conn = sqlite3.connect('selfie_booth.db')
+    cursor = conn.cursor()
+    
+    debug_status = "Default QR screen"
+    current_time = datetime.now().strftime('%H:%M:%S')
+    last_cleanup = "Just now"
+    
+    # Debug: Show all sessions
+    cursor.execute('SELECT session_id, first_name, verified, created_at FROM sessions ORDER BY created_at DESC')
+    all_sessions = cursor.fetchall()
+    print(f"🔍 Debug - All sessions: {all_sessions}")
+    
+    # Check if there's a verified user ready for photo (within 3 minutes)
+    cursor.execute('''
+        SELECT first_name, session_id, created_at FROM sessions 
+        WHERE verified = 1
+        ORDER BY created_at DESC 
+        LIMIT 1
+    ''')
+    verified_result = cursor.fetchone()
+    
+    if verified_result:
+        first_name, session_id, created_at = verified_result
+        print(f"🔍 Found verified session: {first_name}, {session_id}, {created_at}")
+        try:
+            # Handle different timestamp formats
+            if 'T' in created_at:
+                created_time = datetime.fromisoformat(created_at)
+            else:
+                created_time = datetime.fromisoformat(created_at.replace(' ', 'T'))
+            
+            time_diff = datetime.now() - created_time
+            if time_diff < timedelta(minutes=3):
+                debug_status = f"Camera mode for {first_name} (verified {time_diff.total_seconds():.0f}s ago)"
+                print(f"🎥 Showing camera interface for {first_name}")
+                cursor.close()
+                conn.close()
+                return render_template_string(KIOSK_CAMERA_PAGE, name=first_name, session_id=session_id)
+            else:
+                print(f"⏰ Verified session for {first_name} expired ({time_diff.total_seconds():.0f}s ago)")
+        except (ValueError, TypeError) as e:
+            print(f"⚠️ Error parsing timestamp {created_at}: {e}")
+    
+    # Check if there's a recent registration waiting for verification
+    cursor.execute('''
+        SELECT first_name, verification_code, created_at FROM sessions 
+        WHERE verified = 0 OR verified = FALSE
+        ORDER BY created_at DESC 
+        LIMIT 1
+    ''')
+    unverified_result = cursor.fetchone()
+    
+    if unverified_result:
+        first_name, verification_code, created_at = unverified_result
+        print(f"🔍 Found unverified session: {first_name}, {verification_code}, {created_at}")
+        try:
+            # Handle different timestamp formats
+            if 'T' in created_at:
+                created_time = datetime.fromisoformat(created_at)
+            else:
+                created_time = datetime.fromisoformat(created_at.replace(' ', 'T'))
+            
+            time_diff = datetime.now() - created_time
+            if time_diff < timedelta(minutes=2):
+                debug_status = f"Verification for {first_name} (registered {time_diff.total_seconds():.0f}s ago)"
+                print(f"🔢 Showing verification code {verification_code} for {first_name}")
+                cursor.close()
+                conn.close()
+                return render_template_string(KIOSK_VERIFICATION_PAGE, 
+                                            name=first_name, 
+                                            code=verification_code)
+            else:
+                print(f"⏰ Unverified session for {first_name} expired ({time_diff.total_seconds():.0f}s ago)")
+        except (ValueError, TypeError) as e:
+            print(f"⚠️ Error parsing timestamp {created_at}: {e}")
+    
+    cursor.close()
+    conn.close()
+    
+    # Show normal kiosk page (default state)
+    print(f"🏠 Showing default kiosk page - No active sessions found")
+    base_url = request.host_url.rstrip('/')
+    return render_template_string(KIOSK_PAGE, 
+                                base_url=base_url,
+                                debug_status=debug_status,
+                                current_time=current_time,
+                                last_cleanup=last_cleanup)
+
+@app.route('/mobile')
+def mobile():
+    """Mobile registration page - accessed via QR code"""
+    return render_template_string(MOBILE_PAGE)
+
+@app.route('/register', methods=['POST'])
+def register():
+    data = request.get_json()
+    
+    # Validation
+    if not data.get('firstName') or not data.get('phone') or not data.get('consent'):
+        return jsonify({'success': False, 'error': 'Please fill in all required fields'})
+    
+    # Generate verification code
+    verification_code = str(random.randint(100000, 999999))
+    
+    # Store in database
+    conn = sqlite3.connect('selfie_booth.db')
+    cursor = conn.cursor()
+    
+    session_id = secrets.token_urlsafe(16)
+    session['session_id'] = session_id
+    
+    # Explicitly set verified=FALSE and use current timestamp
+    current_time = datetime.now().isoformat()
+    cursor.execute('''
+        INSERT OR REPLACE INTO sessions (session_id, phone, first_name, email, verification_code, verified, created_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+    ''', (session_id, data['phone'], data['firstName'], data.get('email', ''), verification_code, False, current_time))
+    
+    conn.commit()
+    conn.close()
+    
+    print(f"📝 New registration: {data['firstName']} - Code: {verification_code} - Session: {session_id}")
+    
+    return jsonify({'success': True})
+
+@app.route('/verify')
+def verify_page():
+    if 'session_id' not in session:
+        return redirect('/mobile')
+    
+    # Check if session exists and is not verified
+    conn = sqlite3.connect('selfie_booth.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT verified FROM sessions WHERE session_id = ?', (session['session_id'],))
+    result = cursor.fetchone()
+    conn.close()
+    
+    if not result:
+        return redirect('/mobile')
+    
+    if result[0]:  # Already verified
+        return redirect('/')
+    
+    return render_template_string(VERIFY_PAGE)
+
+@app.route('/verify', methods=['POST'])
+def verify_code():
+    if 'session_id' not in session:
+        return jsonify({'success': False, 'error': 'Session expired'})
+    
+    data = request.get_json()
+    entered_code = data.get('code')
+    
+    # Check code
+    conn = sqlite3.connect('selfie_booth.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT verification_code, first_name FROM sessions 
+        WHERE session_id = ? AND verification_code = ?
+    ''', (session['session_id'], entered_code))
+    
+    result = cursor.fetchone()
+    
+    if result:
+        # Mark as verified with explicit value
+        cursor.execute('''
+            UPDATE sessions SET verified = 1 WHERE session_id = ?
+        ''', (session['session_id'],))
+        conn.commit()
+        conn.close()
+        
+        print(f"✅ Verification successful for {result[1]} - Session: {session['session_id']}")
+        return jsonify({'success': True})
+    else:
+        conn.close()
+        print(f"❌ Verification failed for session {session.get('session_id')} - Code: {entered_code}")
+        return jsonify({'success': False, 'error': 'Invalid code'})
+
+@app.route('/upload_photo', methods=['POST'])
+def upload_photo():
+    if 'photo' not in request.files:
+        return jsonify({'success': False, 'error': 'No photo uploaded'})
+    
+    photo = request.files['photo']
+    if photo.filename == '':
+        return jsonify({'success': False, 'error': 'No photo selected'})
+    
+    # Get session_id from form data (sent from kiosk) or session (from mobile)
+    session_id = request.form.get('session_id') or session.get('session_id')
+    
+    if not session_id:
+        return jsonify({'success': False, 'error': 'No session found'})
+    
+    # Get user info
+    conn = sqlite3.connect('selfie_booth.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT phone, first_name, email, verified FROM sessions WHERE session_id = ?
+    ''', (session_id,))
+    result = cursor.fetchone()
+    
+    if not result or not result[3]:  # Not verified
+        conn.close()
+        return jsonify({'success': False, 'error': 'Not verified'})
+    
+    phone, first_name, email, verified = result
+    
+    try:
+        # Read photo data
+        photo_data = photo.read()
+        
+        # Send photo using configured messaging service
+        messaging_service = get_messaging_service()
+        message = f"Hi {first_name}! Here's your selfie from the photo booth. Reply 'background' to change the background!"
+        
+        # Use phone for SMS services, email for email service, or session_id for local storage
+        recipient = email if isinstance(messaging_service, EmailService) and email else phone
+        if isinstance(messaging_service, LocalStorageService):
+            recipient = session_id
+            
+        success, details = messaging_service.send_photo(recipient, photo_data, message)
+        
+        if success:
+            # Save photo path in database
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            photo_filename = f"selfie_{session_id}_{timestamp}.jpg"
+            photo_path = os.path.join(app.config['UPLOAD_FOLDER'], photo_filename)
+            
+            with open(photo_path, 'wb') as f:
+                f.write(photo_data)
+            
+            cursor.execute('''
+                UPDATE sessions SET photo_path = ? WHERE session_id = ?
+            ''', (photo_path, session_id))
+            conn.commit()
+            
+            # Clean up this completed session
+            cursor.execute('DELETE FROM sessions WHERE session_id = ?', (session_id,))
+            conn.commit()
+            
+            conn.close()
+            print(f"📸 Photo sent successfully for {first_name}")
+            return jsonify({'success': True, 'message': details})
+        else:
+            conn.close()
+            return jsonify({'success': False, 'error': details})
+            
+    except Exception as e:
+        conn.close()
+        return jsonify({'success': False, 'error': str(e)})
+
+@app.route('/trigger_photo', methods=['POST'])
+def trigger_photo():
+    """Manual photo trigger from kiosk (for testing or manual operation)"""
+    # Check if there's a verified user ready for photo
+    conn = sqlite3.connect('selfie_booth.db')
+    cursor = conn.cursor()
+    cursor.execute('''
+        SELECT session_id FROM sessions 
+        WHERE verified = TRUE 
+        ORDER BY created_at DESC 
+        LIMIT 1
+    ''')
+    result = cursor.fetchone()
+    conn.close()
+    
+    if result:
+        # Set the session and redirect to camera
+        session['session_id'] = result[0]
+        return jsonify({'success': True, 'redirect': '/camera'})
+    else:
+        return jsonify({'success': False, 'error': 'No verified user ready'})
+
+@app.route('/admin/reset_sessions', methods=['POST'])
+def reset_sessions():
+    """Reset all sessions (for debugging)"""
+    try:
+        conn = sqlite3.connect('selfie_booth.db')
+        cursor = conn.cursor()
+        cursor.execute('DELETE FROM sessions')
+        deleted_count = cursor.rowcount
+        conn.commit()
+        conn.close()
+        
+        print(f"🔄 Reset {deleted_count} sessions")
+        return jsonify({'success': True, 'message': f'Reset {deleted_count} sessions'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)})
+
+# Configuration endpoint for switching services
+@app.route('/admin/config')
+def admin_config():
+    # Get current session count
+    conn = sqlite3.connect('selfie_booth.db')
+    cursor = conn.cursor()
+    cursor.execute('SELECT COUNT(*) FROM sessions')
+    session_count = cursor.fetchone()[0]
+    
+    cursor.execute('SELECT COUNT(*) FROM sessions WHERE verified = 1 OR verified = TRUE')
+    verified_count = cursor.fetchone()[0]
+    
+    cursor.execute('SELECT COUNT(*) FROM sessions WHERE verified = 0 OR verified = FALSE')
+    unverified_count = cursor.fetchone()[0]
+    
+    # Get recent sessions for debugging
+    cursor.execute('''
+        SELECT session_id, first_name, phone, verified, verification_code, created_at 
+        FROM sessions 
+        ORDER BY created_at DESC 
+        LIMIT 10
+    ''')
+    recent_sessions = cursor.fetchall()
+    
+    conn.close()
+    
+    sessions_html = ""
+    if recent_sessions:
+        sessions_html = "<h3>Recent Sessions (Last 10):</h3><table border='1' style='border-collapse: collapse; width: 100%;'>"
+        sessions_html += "<tr><th>Name</th><th>Phone</th><th>Verified</th><th>Code</th><th>Created</th><th>Age</th></tr>"
+        
+        for session in recent_sessions:
+            session_id, name, phone, verified, code, created_at = session
+            try:
+                if 'T' in created_at:
+                    created_time = datetime.fromisoformat(created_at)
+                else:
+                    created_time = datetime.fromisoformat(created_at.replace(' ', 'T'))
+                age = datetime.now() - created_time
+                age_str = f"{age.total_seconds():.0f}s ago"
+            except:
+                age_str = "Unknown"
+            
+            verified_str = "✅ Yes" if verified else "❌ No"
+            sessions_html += f"<tr><td>{name}</td><td>{phone}</td><td>{verified_str}</td><td>{code}</td><td>{created_at}</td><td>{age_str}</td></tr>"
+        
+        sessions_html += "</table>"
+    else:
+        sessions_html = "<p><em>No sessions found</em></p>"
+    
+    return f'''
+    <h2>Selfie Booth Configuration</h2>
+    <p><strong>Current messaging service:</strong> {os.getenv('MESSAGING_SERVICE', 'local')}</p>
+    <p><strong>Active sessions:</strong> {session_count} total ({verified_count} verified, {unverified_count} unverified)</p>
+    <p><strong>Current time:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+    
+    <div style="margin: 20px 0;">
+        <button onclick="resetSessions()" style="background: #e74c3c; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin-right: 10px;">
+            🔄 Reset All Sessions
+        </button>
+        <button onclick="location.reload()" style="background: #3498db; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer;">
+            🔄 Refresh Page
+        </button>
+    </div>
+    
+    {sessions_html}
+    
+    <h3>URL Structure:</h3>
+    <ul>
+        <li><strong>Kiosk Display:</strong> <a href="/">http://localhost:5001/</a> (shows QR code)</li>
+        <li><strong>Mobile Registration:</strong> <a href="/mobile">http://localhost:5001/mobile</a> (for phones)</li>
+        <li><strong>Admin Config:</strong> <a href="/admin/config">http://localhost:5001/admin/config</a></li>
+    </ul>
+    
+    <h3>To switch messaging services, set environment variables:</h3>
+    <ul>
+        <li><strong>Local Storage:</strong> MESSAGING_SERVICE=local (default)</li>
+        <li><strong>Twilio:</strong> MESSAGING_SERVICE=twilio, TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER</li>
+        <li><strong>Email:</strong> MESSAGING_SERVICE=email, EMAIL_ADDRESS, EMAIL_PASSWORD</li>
+    </ul>
+    
+    <h3>QR Code Setup:</h3>
+    <p>Generate a QR code pointing to: <strong>http://your-domain.com/mobile</strong></p>
+    
+    <h3>Debugging Steps:</h3>
+    <ol>
+        <li><strong>Test Mobile Registration:</strong> <a href="/mobile" target="_blank">Open mobile page</a></li>
+        <li><strong>Check Kiosk Display:</strong> <a href="/" target="_blank">Open kiosk page</a></li>
+        <li><strong>Monitor Server Console:</strong> Watch the terminal for debug messages</li>
+        <li><strong>Reset if Stuck:</strong> Use the reset button above</li>
+    </ol>
+    
+    <script>
+        async function resetSessions() {{
+            if (confirm('Are you sure you want to reset all sessions?')) {{
+                try {{
+                    const response = await fetch('/admin/reset_sessions', {{ method: 'POST' }});
+                    const result = await response.json();
+                    
+                    if (result.success) {{
+                        alert('Sessions reset successfully!');
+                        location.reload();
+                    }} else {{
+                        alert('Error: ' + result.error);
+                    }}
+                }} catch (error) {{
+                    alert('Error resetting sessions');
+                }}
+            }}
+        }}
+        
+        // Auto-refresh every 5 seconds
+        setTimeout(() => {{
+            location.reload();
+        }}, 5000);
+    </script>
+    '''
+
+if __name__ == '__main__':
+    init_db()
+    print("🚀 Selfie Booth Starting...")
+    print("📱 Set MESSAGING_SERVICE environment variable to switch platforms:")
+    print("   - local (default) - saves photos locally")
+    print("   - twilio - sends via SMS (requires Twilio credentials)")
+    print("   - email - sends via email (requires email credentials)")
+    print("\n🌐 URLs:")
+    print("   - Kiosk Display: http://localhost:5001/ (connect monitor/TV here)")
+    print("   - Mobile Registration: http://localhost:5001/mobile (for QR code)")
+    print("   - Admin Config: http://localhost:5001/admin/config")
+    print("\n📋 Create QR code pointing to: http://localhost:5001/mobile")
+    print("\n🔧 Debug: Check admin panel for session status")
+    
+    app.run(debug=True, host='0.0.0.0', port=5001)

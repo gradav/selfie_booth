@@ -1,0 +1,29 @@
+# Selfie Booth Application - Production Requirements
+# Core Flask dependencies
+Flask==3.0.0
+Werkzeug==3.0.1
+MarkupSafe==2.1.3
+
+# Configuration management
+python-dotenv==1.0.0
+
+# Production server
+gunicorn==21.2.0
+
+# Messaging services
+twilio==8.9.1
+
+# Image processing
+Pillow==10.1.0
+
+# Security: File type detection
+python-magic==0.4.27
+
+# For Raspberry Pi compatibility
+# Note: On Raspberry Pi, you may need to install libmagic:
+# sudo apt-get install libmagic1 libmagic-dev
+
+# Optional: If using email with OAuth
+# google-auth==2.23.3
+# google-auth-oauthlib==1.1.0qrcode==7.4.2
+picamera==1.13
