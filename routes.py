@@ -115,10 +115,16 @@ def register_routes(app, sm, mf, uf):
     
     print("🔗 Registering routes...")
     
-    # Root redirect
+    # Root redirect - only for local development
     @app.route('/')
     def root():
-        return redirect('/selfie_booth/')
+        # Check if we're in a hosted subdirectory environment
+        if request.environ.get('SCRIPT_NAME') or '/selfie_booth' in request.url_root:
+            # In hosted environment, serve kiosk directly
+            return kiosk()
+        else:
+            # Local development, redirect to selfie_booth
+            return redirect('/selfie_booth/')
     
     # Kiosk display
     @app.route('/selfie_booth/')
@@ -176,7 +182,16 @@ def register_routes(app, sm, mf, uf):
     
     # Mobile registration
     @app.route('/selfie_booth/mobile')
+    @app.route('/mobile')
     def mobile():
+        # Check for redirect loop indicators
+        from_verify = request.args.get('from_verify')
+        from_photo = request.args.get('from_photo')
+        
+        if from_verify or from_photo:
+            # Clear any problematic session data
+            session.pop('session_id', None)
+        
         tablet_id = request.args.get('tablet_id') or get_tablet_id()
         location = request.args.get('location') or get_location()
         
@@ -189,6 +204,7 @@ def register_routes(app, sm, mf, uf):
     
     # Registration endpoint
     @app.route('/selfie_booth/register', methods=['POST'])
+    @app.route('/register', methods=['POST'])
     @rate_limit(max_requests=50, window_minutes=1)
     def register():
         data = request.get_json()
@@ -228,17 +244,29 @@ def register_routes(app, sm, mf, uf):
     
     # Verification page
     @app.route('/selfie_booth/verify')
+    @app.route('/verify')
     def verify_page():
+        # Check if we're coming from a redirect loop
+        if request.args.get('from_redirect'):
+            # Clear session and start fresh
+            session.clear()
+            return redirect('/selfie_booth/')
+        
         if 'session_id' not in session:
-            return redirect('/selfie_booth/mobile')
+            return redirect('/selfie_booth/mobile?from_verify=1')
         
         return render_template_string(VERIFY_PAGE_OPTIMIZED)
     
     # Verification endpoint
     @app.route('/selfie_booth/verify', methods=['POST'])
+    @app.route('/verify', methods=['POST'])
     @rate_limit(max_requests=25, window_minutes=1)
     def verify_code():
+        client_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+        print(f"🔐 verify_code called at {datetime.now().isoformat()} from IP {client_ip}")
+        
         if 'session_id' not in session:
+            print(f"❌ Session expired for {client_ip}")
             return jsonify({'success': False, 'error': 'Session expired'})
         
         data = request.get_json()
@@ -250,29 +278,42 @@ def register_routes(app, sm, mf, uf):
         success, first_name = session_manager.verify_session(session['session_id'], entered_code)
         
         if success:
-            print(f"✅ Verification successful for {first_name}")
+            print(f"✅ Verification successful for {first_name} from {client_ip}")
             return jsonify({'success': True, 'redirect': '/selfie_booth/photo_session'})
         else:
+            print(f"❌ Invalid verification code from {client_ip}")
             return jsonify({'success': False, 'error': 'Invalid code'})
     
     # Photo session
     @app.route('/selfie_booth/photo_session')
+    @app.route('/photo_session')
     def photo_session():
+        # Check if we're coming from a redirect loop
+        if request.args.get('from_redirect'):
+            # Clear session and start fresh
+            session.clear()
+            return redirect('/selfie_booth/')
+        
         if 'session_id' not in session:
-            return redirect('/selfie_booth/mobile')
+            return redirect('/selfie_booth/mobile?from_photo=1')
         
         result = session_manager.get_session_by_id(session['session_id'])
         if not result or not result[6]:
-            return redirect('/selfie_booth/verify')
+            return redirect('/selfie_booth/verify?from_photo=1')
         
         return render_template_string(PHOTO_SESSION_PAGE_OPTIMIZED, 
                                     session_id=session['session_id'])
     
     # Upload photo
     @app.route('/selfie_booth/upload_photo', methods=['POST'])
-    @rate_limit(max_requests=15, window_minutes=1)
+    @app.route('/upload_photo', methods=['POST'])
+    @rate_limit(max_requests=100, window_minutes=1)
     def upload_photo():
+        client_ip = request.headers.get('X-Forwarded-For', request.remote_addr)
+        print(f"🔍 upload_photo called at {datetime.now().isoformat()} from IP {client_ip}")
+        
         if 'photo' not in request.files:
+            print(f"❌ No photo in request from {client_ip}")
             return jsonify({'success': False, 'error': 'No photo uploaded'})
         
         photo = request.files['photo']
@@ -290,14 +331,16 @@ def register_routes(app, sm, mf, uf):
             photo_data_b64 = base64.b64encode(photo_data).decode('utf-8')
             session_manager.update_photo_data(session_id, photo_data_b64)
             
-            print(f"📸 Photo uploaded for session: {session_id}")
+            print(f"📸 Photo uploaded successfully for session: {session_id} from {client_ip}")
             return jsonify({'success': True, 'message': 'Photo ready for review'})
             
         except Exception as e:
+            print(f"❌ Upload failed for session {session_id} from {client_ip}: {str(e)}")
             return jsonify({'success': False, 'error': 'Upload failed'})
     
     # Check photo
     @app.route('/selfie_booth/check_photo')
+    @app.route('/check_photo')
     @rate_limit(max_requests=30, window_minutes=1)
     def check_photo():
         session_id = request.args.get('session_id')
@@ -313,7 +356,8 @@ def register_routes(app, sm, mf, uf):
     
     # Keep photo
     @app.route('/selfie_booth/keep_photo', methods=['POST'])
-    @rate_limit(max_requests=10, window_minutes=1)
+    @app.route('/keep_photo', methods=['POST'])
+    @rate_limit(max_requests=50, window_minutes=1)
     def keep_photo():
         data = request.get_json()
         session_id = data.get('session_id')
@@ -359,7 +403,8 @@ def register_routes(app, sm, mf, uf):
     
     # Retake photo
     @app.route('/selfie_booth/retake_photo', methods=['POST'])
-    @rate_limit(max_requests=5, window_minutes=1)
+    @app.route('/retake_photo', methods=['POST'])
+    @rate_limit(max_requests=25, window_minutes=1)
     def retake_photo():
         data = request.get_json()
         session_id = data.get('session_id')
@@ -372,8 +417,9 @@ def register_routes(app, sm, mf, uf):
         print(f"🔄 Photo retake for session {session_id}")
         return jsonify({'success': True})
     
-    # Session check
+    # Session check - both paths for hosted and local environments
     @app.route('/selfie_booth/session_check')
+    @app.route('/session_check')
     @rate_limit(max_requests=100, window_minutes=1)
     def session_check():
         tablet_id = request.args.get('tablet_id')
@@ -385,25 +431,30 @@ def register_routes(app, sm, mf, uf):
             'tablet_id': tablet_id
         })
     
-    # Short URLs
+    # Short URLs - both paths for hosted and local environments
     @app.route('/selfie_booth/1')
+    @app.route('/1')
     def booth_location_1():
-        return redirect('/selfie_booth/mobile?tablet_id=TABLET1&location=lobby')
+        return redirect('mobile?tablet_id=TABLET1&location=lobby')
 
     @app.route('/selfie_booth/2') 
+    @app.route('/2')
     def booth_location_2():
-        return redirect('/selfie_booth/mobile?tablet_id=TABLET2&location=entrance')
+        return redirect('mobile?tablet_id=TABLET2&location=entrance')
 
     @app.route('/selfie_booth/3')
+    @app.route('/3')
     def booth_location_3():
-        return redirect('/selfie_booth/mobile?tablet_id=TABLET3&location=event_hall')
+        return redirect('mobile?tablet_id=TABLET3&location=event_hall')
 
     @app.route('/selfie_booth/4')
+    @app.route('/4')
     def booth_location_4():
-        return redirect('/selfie_booth/mobile?tablet_id=TABLET4&location=party_room')
+        return redirect('mobile?tablet_id=TABLET4&location=party_room')
     
     # Admin
     @app.route('/selfie_booth/admin')
+    @app.route('/admin')
     def admin():
         total_count, verified_count, unverified_count = session_manager.get_session_stats()
         recent_sessions = session_manager.get_recent_sessions(10)
@@ -437,6 +488,7 @@ def register_routes(app, sm, mf, uf):
     
     # Health check
     @app.route('/selfie_booth/health')
+    @app.route('/health')
     def health():
         try:
             if hasattr(session_manager, 'get_connection'):
@@ -464,6 +516,7 @@ def register_routes(app, sm, mf, uf):
     
     # Test endpoint
     @app.route('/selfie_booth/test')
+    @app.route('/test')
     def test_route():
         return jsonify({
             'status': 'success',
@@ -472,6 +525,22 @@ def register_routes(app, sm, mf, uf):
             'session_manager': str(type(session_manager)),
             'messaging_factory': str(type(messaging_factory)),
             'session_data': dict(session) if session else 'No session'
+        })
+    
+    # Debug route to see all registered routes
+    @app.route('/selfie_booth/debug_routes')
+    @app.route('/debug_routes')
+    def debug_routes():
+        routes = []
+        for rule in app.url_map.iter_rules():
+            routes.append({
+                'endpoint': rule.endpoint,
+                'methods': list(rule.methods),
+                'rule': str(rule)
+            })
+        return jsonify({
+            'total_routes': len(routes),
+            'routes': routes
         })
     
     route_count = len([rule for rule in app.url_map.iter_rules() if rule.endpoint != 'static'])

@@ -14,7 +14,7 @@ try:
     from mysql.connector import Error
     MYSQL_AVAILABLE = True
 except ImportError:
-    mysql.connector = None
+    mysql = None
     Error = Exception
     MYSQL_AVAILABLE = False
 

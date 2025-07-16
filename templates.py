@@ -153,7 +153,7 @@ KIOSK_PAGE_OPTIMIZED = '''
         
         async function checkForUpdates() {
             try {
-                const response = await fetch('/session_check?tablet_id={{ tablet_id }}');
+                const response = await fetch('session_check?tablet_id={{ tablet_id }}');
                 const data = await response.json();
                 const currentState = data.session_state;
                 
@@ -302,7 +302,7 @@ MOBILE_PAGE_OPTIMIZED = '''
             const data = Object.fromEntries(formData);
             
             try {
-                const response = await fetch('/register', {
+                const response = await fetch('register', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(data)
@@ -312,7 +312,7 @@ MOBILE_PAGE_OPTIMIZED = '''
                 
                 if (result.success) {
                     submitBtn.textContent = 'Success! Redirecting...';
-                    window.location.href = '/verify';
+                    window.location.href = 'verify';
                 } else {
                     errorDiv.textContent = result.error;
                     submitBtn.disabled = false;
@@ -416,6 +416,7 @@ VERIFY_PAGE_OPTIMIZED = '''
         const codeInput = document.getElementById('codeInput');
         const verifyBtn = document.getElementById('verifyBtn');
         const messageDiv = document.getElementById('message');
+        let verificationInProgress = false;
         
         // Auto-focus on input
         codeInput.focus();
@@ -428,6 +429,13 @@ VERIFY_PAGE_OPTIMIZED = '''
         document.getElementById('verifyForm').addEventListener('submit', async (e) => {
             e.preventDefault();
             
+            console.log('🔐 Verification form submitted at:', new Date().toISOString());
+            
+            if (verificationInProgress) {
+                console.log('🛑 Verification already in progress, skipping duplicate request');
+                return;
+            }
+            
             const code = codeInput.value;
             
             if (code.length !== 6) {
@@ -435,23 +443,27 @@ VERIFY_PAGE_OPTIMIZED = '''
                 return;
             }
             
+            verificationInProgress = true;
             verifyBtn.disabled = true;
             verifyBtn.textContent = 'Verifying...';
             messageDiv.innerHTML = '';
             
             try {
-                const response = await fetch('/verify', {
+                console.log('📤 Sending verification request at:', new Date().toISOString());
+                const response = await fetch('verify', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ code })
                 });
                 
+                console.log('📬 Verification response received at:', new Date().toISOString(), 'Status:', response.status);
                 const result = await response.json();
+                console.log('📋 Verification result:', result);
                 
                 if (result.success) {
                     messageDiv.innerHTML = '<div class="success">✅ Verified! Redirecting...</div>';
                     setTimeout(() => {
-                        window.location.href = result.redirect || '/photo_session';
+                        window.location.href = result.redirect || 'photo_session';
                     }, 1000);
                 } else {
                     messageDiv.innerHTML = '<div class="error">❌ ' + result.error + '</div>';
@@ -464,6 +476,8 @@ VERIFY_PAGE_OPTIMIZED = '''
                 messageDiv.innerHTML = '<div class="error">❌ Network error</div>';
                 verifyBtn.disabled = false;
                 verifyBtn.textContent = 'Verify Code';
+            } finally {
+                verificationInProgress = false;
             }
         });
     </script>
@@ -582,7 +596,7 @@ VERIFICATION_DISPLAY_PAGE = '''
                 countdownEl.style.color = '#e74c3c';
                 // Auto-refresh to go back to start
                 setTimeout(() => {
-                    window.location.href = '/';
+                    window.location.href = './';
                 }, 2000);
             }
             timeLeft--;
@@ -590,7 +604,7 @@ VERIFICATION_DISPLAY_PAGE = '''
         
         // Smart refresh - check session state instead of full reload
         setTimeout(() => {
-            fetch('/session_check?tablet_id={{ tablet_id }}')
+            fetch('session_check?tablet_id={{ tablet_id }}')
                 .then(r => r.json())
                 .then(data => {
                     if (data.session_state !== 'verification') {
@@ -754,7 +768,7 @@ PHOTO_SESSION_PAGE_OPTIMIZED = '''
         
         async function checkForPhoto() {
             try {
-                const response = await fetch(`/check_photo?session_id=${sessionId}`);
+                const response = await fetch(`check_photo?session_id=${sessionId}`);
                 const result = await response.json();
                 
                 if (result.photo_ready) {
@@ -787,7 +801,7 @@ PHOTO_SESSION_PAGE_OPTIMIZED = '''
             keepBtn.textContent = 'Sending...';
             
             try {
-                const response = await fetch('/keep_photo', {
+                const response = await fetch('/selfie_booth/keep_photo', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ session_id: sessionId })
@@ -800,7 +814,7 @@ PHOTO_SESSION_PAGE_OPTIMIZED = '''
                     document.getElementById('successMessage').style.display = 'block';
                     
                     setTimeout(() => {
-                        window.location.href = '/mobile';
+                        window.location.href = 'mobile';
                     }, 3000);
                 } else {
                     alert('Error sending photo: ' + result.error);
@@ -826,7 +840,7 @@ PHOTO_SESSION_PAGE_OPTIMIZED = '''
             retakeBtn.textContent = 'Starting Retake...';
             
             try {
-                const response = await fetch('/retake_photo', {
+                const response = await fetch('/selfie_booth/retake_photo', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ session_id: sessionId })
@@ -975,6 +989,7 @@ CAMERA_PAGE_OPTIMIZED = '''
     <script>
         let video, canvas, ctx, photoDisplay;
         let countdownInterval;
+        let uploadInProgress = false;
         const sessionId = "{{ session_id }}";
         
         async function initCamera() {
@@ -1028,6 +1043,14 @@ CAMERA_PAGE_OPTIMIZED = '''
         }
         
         async function takePhoto() {
+            console.log('🚀 takePhoto() called at:', new Date().toISOString());
+            
+            if (uploadInProgress) {
+                console.log('🛑 Upload already in progress, skipping duplicate request');
+                return;
+            }
+            
+            uploadInProgress = true;
             const countdownEl = document.getElementById('countdown');
             const statusEl = document.getElementById('status');
             
@@ -1055,20 +1078,23 @@ CAMERA_PAGE_OPTIMIZED = '''
                 countdownEl.textContent = '';
                 statusEl.innerHTML = '<div class="success">📱 Processing your photo...</div>';
                 
+                console.log('📤 About to send upload request at:', new Date().toISOString());
                 try {
-                    const response = await fetch('/upload_photo', {
+                    const response = await fetch('/selfie_booth/upload_photo', {
                         method: 'POST',
                         body: formData
                     });
                     
+                    console.log('📬 Upload response received at:', new Date().toISOString(), 'Status:', response.status);
                     const result = await response.json();
+                    console.log('📋 Upload result:', result);
                     
                     if (result.success) {
                         statusEl.innerHTML = '<div class="success">📱 Photo captured! Check your phone to review and send.</div>';
                         
                         // Return to kiosk after 8 seconds
                         setTimeout(() => {
-                            window.location.href = '/';
+                            window.location.href = './';
                         }, 8000);
                         
                     } else {
@@ -1078,6 +1104,8 @@ CAMERA_PAGE_OPTIMIZED = '''
                 } catch (error) {
                     statusEl.innerHTML = '<div class="error">Network error. Please try again.</div>';
                     resetCamera();
+                } finally {
+                    uploadInProgress = false;
                 }
             }, 'image/jpeg', 0.8);
         }
