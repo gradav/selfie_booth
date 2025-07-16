@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Selfie Booth - System Test</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #667eea;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: #f9f9f9;
+        }
+        
+        .test-section h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        
+        .test-result {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        
+        .test-result.success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        
+        .test-result.error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        
+        .test-result.info {
+            background: #d1ecf1;
+            border: 1px solid #b8daff;
+            color: #0c5460;
+        }
+        
+        .test-button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+        }
+        
+        .test-button:hover {
+            background: #5a6fd8;
+        }
+        
+        .test-button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .status-card {
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+            border: 2px solid #ddd;
+        }
+        
+        .status-card.pass {
+            background: #d4edda;
+            border-color: #28a745;
+        }
+        
+        .status-card.fail {
+            background: #f8d7da;
+            border-color: #dc3545;
+        }
+        
+        .status-card.pending {
+            background: #fff3cd;
+            border-color: #ffc107;
+        }
+        
+        .log-output {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            height: 200px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            margin: 15px 0;
+        }
+        
+        .clear-log {
+            background: #e53e3e;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Selfie Booth System Test</h1>
+        
+        <!-- System Status Overview -->
+        <div class="test-section">
+            <h3>📊 System Status</h3>
+            <div class="status-grid">
+                <div class="status-card pending" id="static-files-status">
+                    <strong>Static Files</strong><br>
+                    <span id="static-files-text">Checking...</span>
+                </div>
+                <div class="status-card pending" id="api-status">
+                    <strong>API Backend</strong><br>
+                    <span id="api-text">Checking...</span>
+                </div>
+                <div class="status-card pending" id="database-status">
+                    <strong>Database</strong><br>
+                    <span id="database-text">Checking...</span>
+                </div>
+                <div class="status-card pending" id="realtime-status">
+                    <strong>Real-time</strong><br>
+                    <span id="realtime-text">Checking...</span>
+                </div>
+            </div>
+            <button class="test-button" onclick="runSystemCheck()">🔄 Run System Check</button>
+        </div>
+
+        <!-- Static File Tests -->
+        <div class="test-section">
+            <h3>📁 Static File Tests</h3>
+            <div id="static-results"></div>
+            <button class="test-button" onclick="testStaticFiles()">Test Static Files</button>
+            <button class="test-button" onclick="testCSS()">Test CSS Loading</button>
+            <button class="test-button" onclick="testJavaScript()">Test JavaScript</button>
+        </div>
+
+        <!-- API Tests -->
+        <div class="test-section">
+            <h3>🔌 API Tests</h3>
+            <div id="api-results"></div>
+            <button class="test-button" onclick="testHealthCheck()">Health Check</button>
+            <button class="test-button" onclick="testRegistration()">Test Registration</button>
+            <button class="test-button" onclick="testVerification()">Test Verification</button>
+            <button class="test-button" onclick="testSessionCheck()">Test Session Check</button>
+        </div>
+
+        <!-- Camera Tests -->
+        <div class="test-section">
+            <h3>📷 Camera Tests</h3>
+            <div id="camera-results"></div>
+            <video id="test-video" width="200" height="150" autoplay playsinline muted style="border: 1px solid #ddd; border-radius: 4px; display: none;"></video>
+            <canvas id="test-canvas" style="display: none;"></canvas>
+            <button class="test-button" onclick="testCameraAccess()">Test Camera Access</button>
+            <button class="test-button" onclick="testPhotoCapture()">Test Photo Capture</button>
+            <button class="test-button" onclick="stopCamera()">Stop Camera</button>
+        </div>
+
+        <!-- Real-time Tests -->
+        <div class="test-section">
+            <h3>⚡ Real-time Tests</h3>
+            <div id="realtime-results"></div>
+            <button class="test-button" onclick="testSSE()">Test Server-Sent Events</button>
+            <button class="test-button" onclick="testPolling()">Test Polling Fallback</button>
+            <button class="test-button" onclick="measureLatency()">Measure Latency</button>
+        </div>
+
+        <!-- Performance Tests -->
+        <div class="test-section">
+            <h3>⚡ Performance Tests</h3>
+            <div id="performance-results"></div>
+            <button class="test-button" onclick="testPageLoad()">Test Page Load Times</button>
+            <button class="test-button" onclick="testAPILatency()">Test API Latency</button>
+            <button class="test-button" onclick="testMemoryUsage()">Check Memory Usage</button>
+        </div>
+
+        <!-- Quick Links -->
+        <div class="test-section">
+            <h3>🔗 Quick Links</h3>
+            <a href="index.html" class="test-button">🖥️ Kiosk Display</a>
+            <a href="mobile.html" class="test-button">📱 Mobile Registration</a>
+            <a href="verify.html" class="test-button">🔐 Verification</a>
+            <a href="photo.html" class="test-button">📸 Photo Session</a>
+            <a href="admin.html" class="test-button">👤 Admin Dashboard</a>
+        </div>
+
+        <!-- Test Log -->
+        <div class="test-section">
+            <h3>📝 Test Log</h3>
+            <button class="clear-log" onclick="clearLog()">Clear Log</button>
+            <div id="test-log" class="log-output"></div>
+        </div>
+    </div>
+
+    <!-- Include configuration and utilities -->
+    <script src="assets/js/config.js"></script>
+    <script src="assets/js/utils.js"></script>
+    <script src="assets/js/api.js"></script>
+
+    <script>
+        // Test system state
+        let testVideo = null;
+        let testCanvas = null;
+        let cameraStream = null;
+
+        // Logging
+        function log(message, type = 'info') {
+            const logElement = document.getElementById('test-log');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = `[${timestamp}] ${type.toUpperCase()}: ${message}\n`;
+            logElement.textContent += logEntry;
+            logElement.scrollTop = logElement.scrollHeight;
+            
+            console.log(`[TEST] ${message}`);
+        }
+
+        function clearLog() {
+            document.getElementById('test-log').textContent = '';
+        }
+
+        function showResult(containerId, message, type) {
+            const container = document.getElementById(containerId);
+            const resultDiv = document.createElement('div');
+            resultDiv.className = `test-result ${type}`;
+            resultDiv.textContent = message;
+            container.appendChild(resultDiv);
+        }
+
+        function updateStatus(statusId, textId, status, message) {
+            const statusElement = document.getElementById(statusId);
+            const textElement = document.getElementById(textId);
+            
+            statusElement.className = `status-card ${status}`;
+            textElement.textContent = message;
+        }
+
+        // ============ System Check ============
+
+        async function runSystemCheck() {
+            log('Starting comprehensive system check...');
+            
+            // Reset all status cards
+            updateStatus('static-files-status', 'static-files-text', 'pending', 'Checking...');
+            updateStatus('api-status', 'api-text', 'pending', 'Checking...');
+            updateStatus('database-status', 'database-text', 'pending', 'Checking...');
+            updateStatus('realtime-status', 'realtime-text', 'pending', 'Checking...');
+            
+            // Test static files
+            try {
+                await testStaticFilesQuiet();
+                updateStatus('static-files-status', 'static-files-text', 'pass', 'All files loaded');
+                log('✅ Static files test passed');
+            } catch (error) {
+                updateStatus('static-files-status', 'static-files-text', 'fail', 'Failed to load');
+                log(`❌ Static files test failed: ${error.message}`, 'error');
+            }
+            
+            // Test API
+            try {
+                const response = await api.healthCheck();
+                if (response.success) {
+                    updateStatus('api-status', 'api-text', 'pass', 'API responding');
+                    log('✅ API health check passed');
+                    
+                    // Test database
+                    const dbStatus = response.data.database;
+                    if (dbStatus === 'connected') {
+                        updateStatus('database-status', 'database-text', 'pass', 'Connected');
+                        log('✅ Database connection verified');
+                    } else {
+                        updateStatus('database-status', 'database-text', 'fail', dbStatus || 'Unknown');
+                        log(`❌ Database issue: ${dbStatus}`, 'error');
+                    }
+                } else {
+                    throw new Error(response.error);
+                }
+            } catch (error) {
+                updateStatus('api-status', 'api-text', 'fail', 'Not responding');
+                updateStatus('database-status', 'database-text', 'fail', 'Cannot check');
+                log(`❌ API test failed: ${error.message}`, 'error');
+            }
+            
+            // Test real-time (simple ping test)
+            try {
+                const startTime = performance.now();
+                const response = await api.checkSessionState('test-tablet');
+                const latency = performance.now() - startTime;
+                
+                if (response.success) {
+                    updateStatus('realtime-status', 'realtime-text', 'pass', `${latency.toFixed(0)}ms`);
+                    log(`✅ Real-time test passed (${latency.toFixed(0)}ms latency)`);
+                } else {
+                    throw new Error(response.error);
+                }
+            } catch (error) {
+                updateStatus('realtime-status', 'realtime-text', 'fail', 'Not working');
+                log(`❌ Real-time test failed: ${error.message}`, 'error');
+            }
+            
+            log('System check completed');
+        }
+
+        // ============ Static File Tests ============
+
+        async function testStaticFiles() {
+            log('Testing static file loading...');
+            document.getElementById('static-results').innerHTML = '';
+            
+            const files = [
+                'assets/css/kiosk.css',
+                'assets/css/mobile.css',
+                'assets/js/config.js',
+                'assets/js/api.js',
+                'assets/js/utils.js'
+            ];
+            
+            for (const file of files) {
+                try {
+                    const response = await fetch(file);
+                    if (response.ok) {
+                        showResult('static-results', `✅ ${file} - OK (${response.status})`, 'success');
+                    } else {
+                        showResult('static-results', `❌ ${file} - Failed (${response.status})`, 'error');
+                    }
+                } catch (error) {
+                    showResult('static-results', `❌ ${file} - Error: ${error.message}`, 'error');
+                }
+            }
+            
+            log('Static file test completed');
+        }
+
+        async function testStaticFilesQuiet() {
+            // Silent version for system check
+            const response = await fetch('assets/js/config.js');
+            if (!response.ok) {
+                throw new Error(`Static file test failed: ${response.status}`);
+            }
+        }
+
+        function testCSS() {
+            log('Testing CSS loading...');
+            document.getElementById('static-results').innerHTML = '';
+            
+            const stylesheets = document.styleSheets;
+            let loadedCount = 0;
+            
+            for (let i = 0; i < stylesheets.length; i++) {
+                try {
+                    const sheet = stylesheets[i];
+                    const rules = sheet.cssRules || sheet.rules;
+                    showResult('static-results', `✅ Stylesheet ${i + 1} - ${rules.length} rules loaded`, 'success');
+                    loadedCount++;
+                } catch (error) {
+                    showResult('static-results', `❌ Stylesheet ${i + 1} - Failed to access rules`, 'error');
+                }
+            }
+            
+            showResult('static-results', `📊 Total: ${loadedCount}/${stylesheets.length} stylesheets loaded`, 'info');
+            log(`CSS test completed: ${loadedCount}/${stylesheets.length} loaded`);
+        }
+
+        function testJavaScript() {
+            log('Testing JavaScript functionality...');
+            document.getElementById('static-results').innerHTML = '';
+            
+            const tests = [
+                { name: 'APP_CONFIG', test: () => typeof APP_CONFIG !== 'undefined' },
+                { name: 'DOMUtils', test: () => typeof DOMUtils !== 'undefined' },
+                { name: 'api', test: () => typeof api !== 'undefined' },
+                { name: 'UTILS', test: () => typeof UTILS !== 'undefined' },
+                { name: 'localStorage', test: () => typeof Storage !== 'undefined' },
+                { name: 'fetch API', test: () => typeof fetch !== 'undefined' },
+                { name: 'Promises', test: () => typeof Promise !== 'undefined' },
+                { name: 'async/await', test: () => { try { eval('(async () => {})'); return true; } catch { return false; } } }
+            ];
+            
+            for (const test of tests) {
+                try {
+                    if (test.test()) {
+                        showResult('static-results', `✅ ${test.name} - Available`, 'success');
+                    } else {
+                        showResult('static-results', `❌ ${test.name} - Not available`, 'error');
+                    }
+                } catch (error) {
+                    showResult('static-results', `❌ ${test.name} - Error: ${error.message}`, 'error');
+                }
+            }
+            
+            log('JavaScript test completed');
+        }
+
+        // ============ API Tests ============
+
+        async function testHealthCheck() {
+            log('Testing API health check...');
+            document.getElementById('api-results').innerHTML = '';
+            
+            try {
+                const response = await api.healthCheck();
+                
+                if (response.success) {
+                    showResult('api-results', '✅ Health check passed', 'success');
+                    showResult('api-results', `📊 Status: ${response.data.status}`, 'info');
+                    showResult('api-results', `💾 Database: ${response.data.database}`, 'info');
+                    showResult('api-results', `📨 Messaging: ${response.data.config?.messaging_service || 'Unknown'}`, 'info');
+                } else {
+                    showResult('api-results', `❌ Health check failed: ${response.error}`, 'error');
+                }
+            } catch (error) {
+                showResult('api-results', `❌ Health check error: ${error.message}`, 'error');
+            }
+            
+            log('Health check test completed');
+        }
+
+        async function testRegistration() {
+            log('Testing registration API...');
+            document.getElementById('api-results').innerHTML = '';
+            
+            const testData = {
+                firstName: 'Test User',
+                phone: '5551234567',
+                email: 'test@example.com',
+                consent: true,
+                tabletId: 'TEST_TABLET',
+                location: 'test_location'
+            };
+            
+            try {
+                const response = await api.register(testData);
+                
+                if (response.success) {
+                    showResult('api-results', '✅ Registration test passed', 'success');
+                    showResult('api-results', `📝 Session ID: ${response.data.session_id}`, 'info');
+                } else {
+                    showResult('api-results', `❌ Registration failed: ${response.error}`, 'error');
+                }
+            } catch (error) {
+                showResult('api-results', `❌ Registration error: ${error.message}`, 'error');
+            }
+            
+            log('Registration test completed');
+        }
+
+        async function testVerification() {
+            log('Testing verification API...');
+            document.getElementById('api-results').innerHTML = '';
+            
+            try {
+                const response = await api.verify('123456');
+                
+                // This should fail since it's a test code
+                if (!response.success) {
+                    showResult('api-results', '✅ Verification API responding (test code rejected as expected)', 'success');
+                } else {
+                    showResult('api-results', '⚠️ Verification API accepting test codes (might be in debug mode)', 'info');
+                }
+            } catch (error) {
+                showResult('api-results', `❌ Verification error: ${error.message}`, 'error');
+            }
+            
+            log('Verification test completed');
+        }
+
+        async function testSessionCheck() {
+            log('Testing session check API...');
+            document.getElementById('api-results').innerHTML = '';
+            
+            try {
+                const response = await api.checkSessionState('TEST_TABLET');
+                
+                if (response.success) {
+                    showResult('api-results', '✅ Session check passed', 'success');
+                    showResult('api-results', `📊 State: ${response.data.session_state}`, 'info');
+                    showResult('api-results', `🏷️ Tablet: ${response.data.tablet_id}`, 'info');
+                } else {
+                    showResult('api-results', `❌ Session check failed: ${response.error}`, 'error');
+                }
+            } catch (error) {
+                showResult('api-results', `❌ Session check error: ${error.message}`, 'error');
+            }
+            
+            log('Session check test completed');
+        }
+
+        // ============ Camera Tests ============
+
+        async function testCameraAccess() {
+            log('Testing camera access...');
+            document.getElementById('camera-results').innerHTML = '';
+            
+            try {
+                testVideo = document.getElementById('test-video');
+                
+                const result = await CameraUtils.getUserMedia();
+                
+                if (result.success) {
+                    cameraStream = result.stream;
+                    testVideo.srcObject = cameraStream;
+                    testVideo.style.display = 'block';
+                    
+                    showResult('camera-results', '✅ Camera access granted', 'success');
+                    showResult('camera-results', `📹 Stream active: ${cameraStream.active}`, 'info');
+                    showResult('camera-results', `🎥 Video tracks: ${cameraStream.getVideoTracks().length}`, 'info');
+                } else {
+                    showResult('camera-results', `❌ Camera access failed: ${result.error}`, 'error');
+                }
+            } catch (error) {
+                showResult('camera-results', `❌ Camera test error: ${error.message}`, 'error');
+            }
+            
+            log('Camera access test completed');
+        }
+
+        async function testPhotoCapture() {
+            if (!cameraStream) {
+                showResult('camera-results', '❌ No camera stream - run camera access test first', 'error');
+                return;
+            }
+            
+            log('Testing photo capture...');
+            
+            try {
+                testCanvas = document.getElementById('test-canvas');
+                
+                const photoBlob = await CameraUtils.capturePhoto(testVideo, testCanvas);
+                
+                if (photoBlob) {
+                    showResult('camera-results', '✅ Photo capture successful', 'success');
+                    showResult('camera-results', `📸 Photo size: ${(photoBlob.size / 1024).toFixed(1)} KB`, 'info');
+                    showResult('camera-results', `🎨 Photo type: ${photoBlob.type}`, 'info');
+                } else {
+                    showResult('camera-results', '❌ Photo capture failed - no blob returned', 'error');
+                }
+            } catch (error) {
+                showResult('camera-results', `❌ Photo capture error: ${error.message}`, 'error');
+            }
+            
+            log('Photo capture test completed');
+        }
+
+        function stopCamera() {
+            if (cameraStream) {
+                CameraUtils.stopStream(cameraStream);
+                cameraStream = null;
+                
+                if (testVideo) {
+                    testVideo.style.display = 'none';
+                    testVideo.srcObject = null;
+                }
+                
+                showResult('camera-results', '⏹️ Camera stopped', 'info');
+                log('Camera stopped');
+            }
+        }
+
+        // ============ Real-time Tests ============
+
+        async function testSSE() {
+            log('Testing Server-Sent Events...');
+            document.getElementById('realtime-results').innerHTML = '';
+            
+            try {
+                // Test if EventSource is available
+                if (typeof EventSource === 'undefined') {
+                    showResult('realtime-results', '❌ EventSource not supported in this browser', 'error');
+                    return;
+                }
+                
+                showResult('realtime-results', '✅ EventSource API available', 'success');
+                
+                // Try to connect to SSE endpoint
+                const eventSource = new EventSource('/api/stream/TEST_TABLET');
+                
+                eventSource.onopen = () => {
+                    showResult('realtime-results', '✅ SSE connection opened', 'success');
+                    eventSource.close();
+                };
+                
+                eventSource.onerror = () => {
+                    showResult('realtime-results', '❌ SSE connection failed', 'error');
+                    eventSource.close();
+                };
+                
+                // Close connection after 5 seconds
+                setTimeout(() => {
+                    eventSource.close();
+                    showResult('realtime-results', 'ℹ️ SSE test connection closed', 'info');
+                }, 5000);
+                
+            } catch (error) {
+                showResult('realtime-results', `❌ SSE test error: ${error.message}`, 'error');
+            }
+            
+            log('SSE test completed');
+        }
+
+        async function testPolling() {
+            log('Testing polling fallback...');
+            document.getElementById('realtime-results').innerHTML = '';
+            
+            try {
+                const startTime = performance.now();
+                const response = await api.checkSessionState('TEST_TABLET');
+                const endTime = performance.now();
+                
+                if (response.success) {
+                    showResult('realtime-results', '✅ Polling test successful', 'success');
+                    showResult('realtime-results', `⏱️ Response time: ${(endTime - startTime).toFixed(0)}ms`, 'info');
+                    showResult('realtime-results', `📊 Session state: ${response.data.session_state}`, 'info');
+                } else {
+                    showResult('realtime-results', `❌ Polling failed: ${response.error}`, 'error');
+                }
+            } catch (error) {
+                showResult('realtime-results', `❌ Polling error: ${error.message}`, 'error');
+            }
+            
+            log('Polling test completed');
+        }
+
+        async function measureLatency() {
+            log('Measuring API latency...');
+            document.getElementById('realtime-results').innerHTML = '';
+            
+            const measurements = [];
+            const testCount = 5;
+            
+            for (let i = 0; i < testCount; i++) {
+                try {
+                    const startTime = performance.now();
+                    const response = await api.checkSessionState('TEST_TABLET');
+                    const endTime = performance.now();
+                    
+                    if (response.success) {
+                        const latency = endTime - startTime;
+                        measurements.push(latency);
+                        showResult('realtime-results', `📊 Test ${i + 1}: ${latency.toFixed(0)}ms`, 'info');
+                    }
+                } catch (error) {
+                    showResult('realtime-results', `❌ Test ${i + 1}: Failed`, 'error');
+                }
+                
+                // Small delay between tests
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+            
+            if (measurements.length > 0) {
+                const average = measurements.reduce((a, b) => a + b) / measurements.length;
+                const min = Math.min(...measurements);
+                const max = Math.max(...measurements);
+                
+                showResult('realtime-results', `📈 Average: ${average.toFixed(0)}ms | Min: ${min.toFixed(0)}ms | Max: ${max.toFixed(0)}ms`, 'success');
+            }
+            
+            log('Latency measurement completed');
+        }
+
+        // ============ Performance Tests ============
+
+        function testPageLoad() {
+            log('Testing page load performance...');
+            document.getElementById('performance-results').innerHTML = '';
+            
+            try {
+                if (performance.timing) {
+                    const timing = performance.timing;
+                    const loadTime = timing.loadEventEnd - timing.navigationStart;
+                    const domReady = timing.domContentLoadedEventEnd - timing.navigationStart;
+                    const firstPaint = timing.responseStart - timing.navigationStart;
+                    
+                    showResult('performance-results', `⏱️ Total load time: ${loadTime}ms`, 'info');
+                    showResult('performance-results', `📄 DOM ready: ${domReady}ms`, 'info');
+                    showResult('performance-results', `🎨 First paint: ${firstPaint}ms`, 'info');
+                    
+                    if (loadTime < 2000) {
+                        showResult('performance-results', '✅ Page load performance: Good', 'success');
+                    } else if (loadTime < 5000) {
+                        showResult('performance-results', '⚠️ Page load performance: Acceptable', 'info');
+                    } else {
+                        showResult('performance-results', '❌ Page load performance: Poor', 'error');
+                    }
+                } else {
+                    showResult('performance-results', '❌ Performance timing not available', 'error');
+                }
+            } catch (error) {
+                showResult('performance-results', `❌ Performance test error: ${error.message}`, 'error');
+            }
+            
+            log('Page load test completed');
+        }
+
+        async function testAPILatency() {
+            log('Testing API latency...');
+            document.getElementById('performance-results').innerHTML = '';
+            
+            const tests = [
+                { name: 'Health Check', fn: () => api.healthCheck() },
+                { name: 'Session Check', fn: () => api.checkSessionState('TEST') }
+            ];
+            
+            for (const test of tests) {
+                try {
+                    const startTime = performance.now();
+                    const response = await test.fn();
+                    const endTime = performance.now();
+                    const latency = endTime - startTime;
+                    
+                    if (response.success) {
+                        showResult('performance-results', `✅ ${test.name}: ${latency.toFixed(0)}ms`, 'success');
+                    } else {
+                        showResult('performance-results', `❌ ${test.name}: Failed in ${latency.toFixed(0)}ms`, 'error');
+                    }
+                } catch (error) {
+                    showResult('performance-results', `❌ ${test.name}: Error`, 'error');
+                }
+            }
+            
+            log('API latency test completed');
+        }
+
+        function testMemoryUsage() {
+            log('Checking memory usage...');
+            document.getElementById('performance-results').innerHTML = '';
+            
+            try {
+                if (performance.memory) {
+                    const memory = performance.memory;
+                    const usedMB = (memory.usedJSHeapSize / 1024 / 1024).toFixed(1);
+                    const totalMB = (memory.totalJSHeapSize / 1024 / 1024).toFixed(1);
+                    const limitMB = (memory.jsHeapSizeLimit / 1024 / 1024).toFixed(1);
+                    
+                    showResult('performance-results', `💾 Used: ${usedMB}MB`, 'info');
+                    showResult('performance-results', `📊 Total: ${totalMB}MB`, 'info');
+                    showResult('performance-results', `🔒 Limit: ${limitMB}MB`, 'info');
+                    
+                    const usagePercent = (memory.usedJSHeapSize / memory.jsHeapSizeLimit) * 100;
+                    
+                    if (usagePercent < 50) {
+                        showResult('performance-results', '✅ Memory usage: Good', 'success');
+                    } else if (usagePercent < 80) {
+                        showResult('performance-results', '⚠️ Memory usage: Moderate', 'info');
+                    } else {
+                        showResult('performance-results', '❌ Memory usage: High', 'error');
+                    }
+                } else {
+                    showResult('performance-results', '❌ Memory info not available', 'error');
+                }
+            } catch (error) {
+                showResult('performance-results', `❌ Memory test error: ${error.message}`, 'error');
+            }
+            
+            log('Memory usage test completed');
+        }
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', () => {
+            log('Test page loaded');
+            log('Running initial system check...');
+            setTimeout(runSystemCheck, 1000);
+        });
+
+        // Handle page unload
+        window.addEventListener('beforeunload', () => {
+            stopCamera();
+        });
+    </script>
+</body>
+</html>

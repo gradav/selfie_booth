@@ -1,0 +1,377 @@
+/* Verification Page Styles */
+body {
+    font-family: 'Arial', sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    margin: 0;
+    padding: 20px;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+}
+
+.container {
+    background: white;
+    padding: 40px;
+    border-radius: 20px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+    max-width: 400px;
+    width: 100%;
+    text-align: center;
+    animation: slideUp 0.5s ease-out;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+h1 {
+    color: #333;
+    margin-bottom: 20px;
+    font-size: 28px;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+}
+
+/* Instruction Box */
+.instruction {
+    background: #e8f4f8;
+    padding: 20px;
+    border-radius: 15px;
+    margin: 20px 0;
+    border-left: 4px solid #667eea;
+    font-size: 16px;
+    line-height: 1.5;
+    position: relative;
+    overflow: hidden;
+}
+
+.instruction:before {
+    content: '👀';
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    font-size: 24px;
+    animation: lookAround 2s infinite;
+}
+
+@keyframes lookAround {
+    0%, 100% { transform: rotate(0deg); }
+    25% { transform: rotate(-10deg); }
+    75% { transform: rotate(10deg); }
+}
+
+.instruction strong {
+    color: #2c3e50;
+    font-weight: bold;
+}
+
+/* Code Input */
+.code-input {
+    font-size: 24px;
+    text-align: center;
+    padding: 15px;
+    border: 3px solid #ddd;
+    border-radius: 10px;
+    width: 200px;
+    margin: 20px 0;
+    letter-spacing: 5px;
+    font-family: 'Courier New', monospace;
+    font-weight: bold;
+    transition: all 0.3s ease;
+    background: #f9f9f9;
+}
+
+.code-input:focus {
+    border-color: #667eea;
+    outline: none;
+    box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+    transform: scale(1.05);
+    background: white;
+}
+
+.code-input:invalid {
+    border-color: #e74c3c;
+    background: #ffeaea;
+}
+
+.code-input:valid {
+    border-color: #27ae60;
+    background: #eafaf1;
+}
+
+/* Verify Button */
+.verify-btn {
+    padding: 15px 30px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+    min-width: 150px;
+}
+
+.verify-btn:before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    transition: left 0.5s;
+}
+
+.verify-btn:hover:before {
+    left: 100%;
+}
+
+.verify-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+}
+
+.verify-btn:active {
+    transform: translateY(0);
+}
+
+.verify-btn:disabled {
+    background: #bdc3c7;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.verify-btn:disabled:before {
+    display: none;
+}
+
+/* Messages */
+.message {
+    margin-top: 15px;
+    min-height: 20px;
+}
+
+.message .error {
+    color: #e74c3c;
+    font-size: 14px;
+    padding: 10px;
+    background: #ffeaea;
+    border: 1px solid #e74c3c;
+    border-radius: 4px;
+    animation: shake 0.5s ease-in-out;
+}
+
+.message .success {
+    color: #27ae60;
+    font-size: 14px;
+    padding: 10px;
+    background: #eafaf1;
+    border: 1px solid #27ae60;
+    border-radius: 4px;
+    animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    75% { transform: translateX(5px); }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* Help Section */
+.help-section {
+    margin-top: 30px;
+    padding-top: 20px;
+    border-top: 1px solid #eee;
+}
+
+.help-section p {
+    color: #666;
+    font-size: 14px;
+    margin-bottom: 15px;
+}
+
+.back-btn {
+    background: transparent;
+    color: #667eea;
+    border: 2px solid #667eea;
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.back-btn:hover {
+    background: #667eea;
+    color: white;
+    transform: translateY(-1px);
+}
+
+/* Loading Overlay */
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    z-index: 9999;
+}
+
+.loading-overlay.active {
+    display: flex;
+}
+
+.spinner {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #667eea;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    animation: spin 1s linear infinite;
+    margin-bottom: 20px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.loading-text {
+    color: white;
+    font-size: 18px;
+    font-weight: bold;
+}
+
+/* Input Animation Effects */
+.code-input.typing {
+    animation: typing 0.1s ease-in-out;
+}
+
+@keyframes typing {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.02); }
+    100% { transform: scale(1); }
+}
+
+/* Auto-fill detection */
+.code-input:-webkit-autofill {
+    -webkit-box-shadow: 0 0 0 30px white inset !important;
+    -webkit-text-fill-color: #333 !important;
+}
+
+/* Focus States for Accessibility */
+.code-input:focus,
+.verify-btn:focus,
+.back-btn:focus {
+    outline: 2px solid #667eea;
+    outline-offset: 2px;
+}
+
+/* Responsive Design */
+@media screen and (max-width: 480px) {
+    body {
+        padding: 10px;
+    }
+    
+    .container {
+        padding: 30px 20px;
+        margin: 10px 0;
+    }
+    
+    h1 {
+        font-size: 24px;
+        margin-bottom: 15px;
+    }
+    
+    .instruction {
+        padding: 15px;
+        font-size: 14px;
+    }
+    
+    .code-input {
+        width: 180px;
+        font-size: 20px;
+        letter-spacing: 3px;
+        padding: 12px;
+    }
+    
+    .verify-btn {
+        padding: 14px 25px;
+        font-size: 15px;
+    }
+    
+    .back-btn {
+        padding: 8px 16px;
+        font-size: 13px;
+    }
+}
+
+@media screen and (max-height: 600px) {
+    body {
+        align-items: flex-start;
+        padding-top: 20px;
+    }
+    
+    .container {
+        margin: 0 auto;
+    }
+    
+    .instruction {
+        margin: 15px 0;
+        padding: 15px;
+    }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+    .code-input {
+        border-width: 4px;
+    }
+    
+    .verify-btn {
+        border: 2px solid #333;
+    }
+    
+    .instruction {
+        border-left-width: 6px;
+    }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+    .container,
+    .verify-btn:before,
+    .instruction:before {
+        animation: none;
+    }
+    
+    .verify-btn:hover,
+    .back-btn:hover {
+        transform: none;
+    }
+}

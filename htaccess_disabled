@@ -1,0 +1,38 @@
+# InMotion Python-Compatible .htaccess
+RewriteEngine On
+
+# Allow Python execution in api directory
+<Directory "api">
+    Options +ExecCGI
+    AddHandler cgi-script .py
+    Require all granted
+</Directory>
+
+# Prevent access to sensitive files
+<FilesMatch "\.(env|log|pyc|pyo|ini|conf|wsgi)$">
+    Require all denied
+</FilesMatch>
+
+# Python CGI execution
+AddHandler cgi-script .py
+Options +ExecCGI
+
+# API routing - direct to Python files
+RewriteRule ^api/health$ api/health.py [L]
+RewriteRule ^api/register$ api/register.py [L]
+RewriteRule ^api/verify$ api/verify.py [L]
+RewriteRule ^api/session_check$ api/session_check.py [L]
+
+# Short URLs
+RewriteRule ^1/?$ mobile.html?tablet_id=TABLET1&location=lobby [R=302,L]
+RewriteRule ^2/?$ mobile.html?tablet_id=TABLET2&location=entrance [R=302,L]
+
+# Default route
+RewriteRule ^/?$ index.html [L]
+
+# Performance optimizations
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType text/css "access plus 1 day"
+    ExpiresByType application/javascript "access plus 1 day"
+</IfModule>

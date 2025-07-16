@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Selfie Booth - Admin Dashboard</title>
+    <link rel="stylesheet" href="assets/css/admin.css">
+</head>
+<body>
+    <div class="admin-container">
+        <header class="admin-header">
+            <h1>📸 Selfie Booth Admin Dashboard</h1>
+            <div class="header-actions">
+                <button id="refresh-btn" class="btn btn-secondary">🔄 Refresh</button>
+                <button id="reset-sessions-btn" class="btn btn-danger">🗑️ Reset All Sessions</button>
+            </div>
+        </header>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number" id="total-sessions">-</div>
+                <div class="stat-label">Total Sessions</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="verified-sessions">-</div>
+                <div class="stat-label">Verified</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="pending-sessions">-</div>
+                <div class="stat-label">Pending</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="photos-taken">-</div>
+                <div class="stat-label">Photos Taken</div>
+            </div>
+        </div>
+
+        <div class="admin-sections">
+            <!-- Recent Sessions -->
+            <section class="admin-section">
+                <h2>Recent Sessions</h2>
+                <div class="table-container">
+                    <table id="sessions-table" class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Phone</th>
+                                <th>Status</th>
+                                <th>Code</th>
+                                <th>Created</th>
+                                <th>Tablet</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="sessions-table-body">
+                            <tr>
+                                <td colspan="7" class="loading">Loading sessions...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
+            <!-- System Status -->
+            <section class="admin-section">
+                <h2>System Status</h2>
+                <div class="status-grid">
+                    <div class="status-item">
+                        <span class="status-label">Database:</span>
+                        <span id="db-status" class="status-value">Checking...</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Messaging Service:</span>
+                        <span id="messaging-status" class="status-value">Checking...</span>
+                    </div>
+                    <div class="status-item">
+                        <span class="status-label">Last Updated:</span>
+                        <span id="last-updated" class="status-value">Never</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Configuration -->
+            <section class="admin-section">
+                <h2>Configuration</h2>
+                <div class="config-grid">
+                    <div class="config-item">
+                        <label for="messaging-service">Messaging Service:</label>
+                        <select id="messaging-service" class="config-input">
+                            <option value="local">Local Storage</option>
+                            <option value="twilio">Twilio SMS</option>
+                            <option value="email">Email</option>
+                        </select>
+                    </div>
+                    <div class="config-item">
+                        <label for="session-timeout">Session Timeout (minutes):</label>
+                        <input type="number" id="session-timeout" class="config-input" value="30" min="5" max="120">
+                    </div>
+                </div>
+                <button id="save-config-btn" class="btn btn-primary">💾 Save Configuration</button>
+            </section>
+
+            <!-- Quick Links -->
+            <section class="admin-section">
+                <h2>Quick Links</h2>
+                <div class="quick-links">
+                    <a href="index.html" class="link-btn">🖥️ Kiosk Display</a>
+                    <a href="mobile.html" class="link-btn">📱 Mobile Registration</a>
+                    <a href="test.html" class="link-btn">🔧 System Test</a>
+                    <a href="api/health" class="link-btn" target="_blank">❤️ Health Check</a>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirmation-modal" class="modal">
+        <div class="modal-content">
+            <h3 id="modal-title">Confirm Action</h3>
+            <p id="modal-message">Are you sure you want to proceed?</p>
+            <div class="modal-actions">
+                <button id="modal-cancel" class="btn btn-secondary">Cancel</button>
+                <button id="modal-confirm" class="btn btn-danger">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="assets/js/config.js"></script>
+    <script src="assets/js/api.js"></script>
+    <script src="assets/js/utils.js"></script>
+    <script src="assets/js/admin.js"></script>
+</body>
+</html>

@@ -1,0 +1,31 @@
+# InMotion-Compatible .htaccess for Selfie Booth
+# Uses only basic directives allowed on shared hosting
+
+# Enable URL rewriting
+RewriteEngine On
+
+# API routing - forward /api/ requests to Python backend
+RewriteRule ^api/(.*)$ api/app.py/$1 [QSA,L]
+
+# Short URL redirects for tablets
+RewriteRule ^1/?$ mobile.html?tablet_id=TABLET1&location=lobby [R=302,L]
+RewriteRule ^2/?$ mobile.html?tablet_id=TABLET2&location=entrance [R=302,L]
+RewriteRule ^3/?$ mobile.html?tablet_id=TABLET3&location=event_hall [R=302,L]
+RewriteRule ^4/?$ mobile.html?tablet_id=TABLET4&location=party_room [R=302,L]
+
+# Legacy URL support
+RewriteRule ^mobile/?$ mobile.html [L]
+RewriteRule ^verify/?$ verify.html [L]
+RewriteRule ^photo/?$ photo.html [L]
+RewriteRule ^admin/?$ admin.html [L]
+
+# Default route - serve kiosk display for root access
+RewriteRule ^/?$ index.html [L]
+
+# Basic security - block access to sensitive files (simple version)
+RewriteRule \.(env|log|py|pyc|pyo|ini|conf|bak)$ - [F,L]
+
+# Remove trailing slashes (clean URLs)
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteCond %{REQUEST_URI} (.+)/$
+RewriteRule ^(.+)/$ /$1 [R=301,L]

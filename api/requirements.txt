@@ -1,0 +1,5 @@
+# Minimal Flask API Requirements for Selfie Booth
+# Core Flask dependencies
+#Flask==3.0.0
+Flask-CORS==4.0.0
+mysql-connector-python==8.2.0

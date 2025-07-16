@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Selfie Booth - Registration</title>
+    <link rel="stylesheet" href="assets/css/mobile.css">
+</head>
+<body>
+    <div class="container">
+        <h1>📸 Selfie Booth</h1>
+        
+        <form id="registration-form">
+            <div class="form-group">
+                <label for="firstName">First Name *</label>
+                <input type="text" id="firstName" name="firstName" required maxlength="50">
+            </div>
+            
+            <div class="form-group">
+                <label for="phone">Phone Number *</label>
+                <input type="tel" id="phone" name="phone" placeholder="(555) 123-4567" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="email">Email (Optional)</label>
+                <input type="email" id="email" name="email" maxlength="100">
+            </div>
+            
+            <div class="checkbox-group">
+                <input type="checkbox" id="consent" name="consent" required>
+                <label for="consent">I agree to receive my photo via text</label>
+            </div>
+            
+            <button type="submit" class="submit-btn" id="submit-btn">Start Photo Session</button>
+            
+            <div id="error-message" class="error"></div>
+            <div id="success-message" class="success"></div>
+        </form>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay">
+        <div class="spinner"></div>
+        <div class="loading-text">Registering...</div>
+    </div>
+
+    <script src="assets/js/config.js"></script>
+    <script src="assets/js/api.js"></script>
+    <script src="assets/js/utils.js"></script>
+    <script src="assets/js/mobile.js"></script>
+</body>
+</html>

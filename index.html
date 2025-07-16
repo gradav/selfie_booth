@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Selfie Booth - Kiosk</title>
+    <link rel="stylesheet" href="assets/css/kiosk.css">
+</head>
+<body>
+    <div class="tablet-info">
+        <span id="tablet-id">Tablet: Loading...</span><br>
+        <span id="location">Location: Loading...</span><br>
+        Status: <span id="status">Initializing</span>
+    </div>
+    
+    <!-- Default Welcome Screen -->
+    <div id="welcome-screen" class="screen active">
+        <div class="kiosk-container">
+            <h1>📸 Selfie Booth</h1>
+            <p class="subtitle">Scan QR code or visit URL on your phone!</p>
+            
+            <div class="qr-info">
+                <div class="qr-label">📱 Scan QR Code:</div>
+                <div class="qr-container">
+                    <div id="qrcode"></div>
+                </div>
+                <div class="url-label">Or visit directly:</div>
+                <div id="mobile-url" class="url">Loading...</div>
+            </div>
+            
+            <div class="instructions-section">
+                <div class="instructions-title">📋 Instructions:</div>
+                <div class="instructions">
+                    <ol>
+                        <li>Scan QR code with phone camera</li>
+                        <li>Fill out registration form</li>
+                        <li>Enter verification code from this screen</li>
+                        <li>Smile for your photo!</li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Verification Code Display Screen -->
+    <div id="verification-screen" class="screen">
+        <div class="verification-container">
+            <h1>📱 Verification Required</h1>
+            <div id="user-greeting" class="user-greeting">Hi [Name]!</div>
+            
+            <div class="code-display">
+                <div class="code-label">Enter this code on your phone:</div>
+                <div id="verification-code" class="code">000000</div>
+                <div class="expires-in" id="countdown">Expires in 2:00</div>
+            </div>
+            
+            <div class="instructions">
+                <p>📱 Go to your phone and enter the <span class="highlight">6-digit code</span> shown above</p>
+                <p>⏰ This code will expire in 2 minutes</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Camera/Photo Session Screen -->
+    <div id="camera-screen" class="screen">
+        <div class="greeting">
+            <h1 id="camera-greeting">Hi [Name], smile for the camera! 📸</h1>
+        </div>
+        
+        <div class="camera-container">
+            <video id="video" autoplay playsinline muted></video>
+            <canvas id="canvas" style="display: none;"></canvas>
+            <img id="photo-display" alt="Your photo" style="display: none;">
+            <div id="camera-countdown" class="countdown"></div>
+            <div class="controls">
+                <button id="photo-btn" class="photo-btn">Take Photo</button>
+            </div>
+            <div id="camera-status" class="status"></div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+    <script src="assets/js/config.js"></script>
+    <script src="assets/js/api.js"></script>
+    <script src="assets/js/realtime.js"></script>
+    <script src="assets/js/kiosk.js"></script>
+</body>
+</html>

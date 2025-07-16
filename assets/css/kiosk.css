@@ -1,0 +1,440 @@
+/* Kiosk Display Styles */
+body {
+    font-family: 'Arial', sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    margin: 0;
+    padding: 0;
+    min-height: 100vh;
+    overflow: hidden; /* Prevent scrolling on kiosk displays */
+}
+
+/* Screen Management */
+.screen {
+    display: none;
+    min-height: 100vh;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    text-align: center;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+.screen.active {
+    display: flex;
+}
+
+/* Tablet Info */
+.tablet-info {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(0,0,0,0.8);
+    color: white;
+    padding: 10px;
+    border-radius: 5px;
+    font-size: 12px;
+    z-index: 1000;
+    font-family: monospace;
+}
+
+#status {
+    font-weight: bold;
+    color: #4CAF50;
+}
+
+#status.verifying {
+    color: #FF9800;
+}
+
+#status.camera {
+    color: #2196F3;
+}
+
+#status.error {
+    color: #F44336;
+}
+
+/* Welcome Screen */
+.kiosk-container {
+    background: white;
+    padding: 60px;
+    border-radius: 30px;
+    box-shadow: 0 30px 60px rgba(0,0,0,0.2);
+    max-width: 800px;
+    width: 90%;
+    animation: slideIn 0.5s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+h1 {
+    color: #333;
+    font-size: 48px;
+    margin-bottom: 20px;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.1);
+}
+
+.subtitle {
+    font-size: 24px;
+    color: #666;
+    margin-bottom: 30px;
+}
+
+/* QR Code Section */
+.qr-info {
+    background: #f8f9fa;
+    padding: 30px;
+    border-radius: 15px;
+    margin: 30px 0;
+    border: 3px solid #667eea;
+    transition: all 0.3s ease;
+}
+
+.qr-info:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+}
+
+.qr-label, .url-label {
+    font-size: 18px;
+    font-weight: bold;
+    margin-bottom: 15px;
+    color: #333;
+}
+
+.qr-container {
+    display: flex;
+    justify-content: center;
+    margin: 20px 0;
+}
+
+#qrcode {
+    background: white;
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    transition: transform 0.3s ease;
+}
+
+#qrcode:hover {
+    transform: scale(1.05);
+}
+
+.url {
+    font-size: 20px;
+    color: #667eea;
+    word-break: break-all;
+    margin: 15px 0;
+    font-weight: bold;
+    font-family: monospace;
+    background: white;
+    padding: 10px;
+    border-radius: 8px;
+    border: 2px solid #667eea;
+}
+
+/* Instructions */
+.instructions-section {
+    margin-top: 40px;
+}
+
+.instructions-title {
+    font-size: 18px;
+    font-weight: bold;
+    margin-bottom: 15px;
+    color: #333;
+}
+
+.instructions {
+    text-align: left;
+    max-width: 400px;
+    margin: 0 auto;
+}
+
+.instructions ol {
+    font-size: 16px;
+    line-height: 1.6;
+    padding-left: 20px;
+}
+
+.instructions li {
+    margin-bottom: 8px;
+    color: #555;
+}
+
+/* Verification Screen */
+.verification-container {
+    background: white;
+    padding: 80px;
+    border-radius: 30px;
+    box-shadow: 0 30px 60px rgba(0,0,0,0.2);
+    max-width: 800px;
+    width: 90%;
+    animation: slideIn 0.5s ease-out;
+}
+
+.user-greeting {
+    color: #667eea;
+    font-size: 28px;
+    margin-bottom: 40px;
+    font-weight: bold;
+}
+
+.code-display {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 60px;
+    border-radius: 25px;
+    margin: 40px 0;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+    animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        transform: scale(1);
+    }
+    50% {
+        transform: scale(1.02);
+    }
+}
+
+.code-label {
+    font-size: 24px;
+    margin-bottom: 10px;
+    opacity: 0.9;
+}
+
+.code {
+    font-size: 96px;
+    font-weight: bold;
+    letter-spacing: 20px;
+    margin: 20px 0;
+    font-family: 'Courier New', monospace;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+}
+
+.expires-in {
+    font-size: 18px;
+    color: #ffeb3b;
+    margin-top: 20px;
+    font-weight: bold;
+    animation: blink 1s infinite;
+}
+
+@keyframes blink {
+    0%, 50% { opacity: 1; }
+    51%, 100% { opacity: 0.7; }
+}
+
+.instructions {
+    font-size: 24px;
+    color: #555;
+    margin-top: 40px;
+    line-height: 1.6;
+}
+
+.highlight {
+    background: #fff3cd;
+    padding: 4px 8px;
+    border-radius: 5px;
+    color: #856404;
+    font-weight: bold;
+}
+
+/* Camera Screen */
+.greeting {
+    background: white;
+    padding: 30px 60px;
+    border-radius: 25px;
+    margin-bottom: 30px;
+    text-align: center;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+    animation: slideIn 0.5s ease-out;
+}
+
+.camera-container {
+    background: white;
+    padding: 40px;
+    border-radius: 30px;
+    box-shadow: 0 30px 60px rgba(0,0,0,0.2);
+    text-align: center;
+    max-width: 900px;
+    width: 90%;
+}
+
+#video {
+    width: 100%;
+    max-width: 700px;
+    border-radius: 20px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+    transform: scaleX(-1); /* Mirror the video */
+}
+
+#photo-display {
+    max-width: 700px;
+    width: 100%;
+    border-radius: 20px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+}
+
+.countdown {
+    font-size: 120px;
+    font-weight: bold;
+    color: #e74c3c;
+    margin: 30px 0;
+    min-height: 140px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-shadow: 4px 4px 8px rgba(0,0,0,0.3);
+    animation: countdownPulse 1s infinite;
+}
+
+@keyframes countdownPulse {
+    0%, 100% {
+        transform: scale(1);
+        color: #e74c3c;
+    }
+    50% {
+        transform: scale(1.1);
+        color: #c0392b;
+    }
+}
+
+.controls {
+    margin-top: 30px;
+}
+
+.photo-btn {
+    padding: 25px 50px;
+    background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+    color: white;
+    border: none;
+    border-radius: 15px;
+    font-size: 28px;
+    cursor: pointer;
+    margin: 15px;
+    transition: all 0.2s ease;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.3);
+    box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+}
+
+.photo-btn:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 12px 24px rgba(0,0,0,0.3);
+}
+
+.photo-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+.photo-btn:disabled {
+    background: #bdc3c7;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.status {
+    margin-top: 30px;
+    font-size: 28px;
+    font-weight: bold;
+    min-height: 40px;
+}
+
+.success {
+    color: #27ae60;
+    animation: fadeIn 0.5s ease-in;
+}
+
+.error {
+    color: #e74c3c;
+    animation: shake 0.5s ease-in-out;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-10px); }
+    75% { transform: translateX(10px); }
+}
+
+/* Responsive Design */
+@media screen and (max-width: 1024px) {
+    .kiosk-container, .verification-container {
+        padding: 40px 20px;
+    }
+    
+    h1 {
+        font-size: 36px;
+    }
+    
+    .qr-info {
+        padding: 20px;
+    }
+    
+    .camera-container {
+        padding: 20px;
+    }
+    
+    .countdown {
+        font-size: 80px;
+    }
+    
+    .photo-btn {
+        padding: 20px 40px;
+        font-size: 24px;
+    }
+    
+    .code {
+        font-size: 72px;
+        letter-spacing: 10px;
+    }
+}
+
+@media screen and (max-width: 768px) {
+    .kiosk-container, .verification-container {
+        padding: 30px 15px;
+    }
+    
+    h1 {
+        font-size: 28px;
+    }
+    
+    .subtitle {
+        font-size: 18px;
+    }
+    
+    .countdown {
+        font-size: 60px;
+    }
+    
+    .code {
+        font-size: 48px;
+        letter-spacing: 5px;
+    }
+    
+    .user-greeting {
+        font-size: 20px;
+    }
+    
+    .instructions {
+        font-size: 18px;
+    }
+}

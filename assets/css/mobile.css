@@ -1,0 +1,347 @@
+/* Mobile Registration Styles */
+body {
+    font-family: 'Arial', sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    margin: 0;
+    padding: 20px;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+}
+
+.container {
+    background: white;
+    padding: 40px;
+    border-radius: 20px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+    max-width: 400px;
+    width: 100%;
+    animation: slideUp 0.5s ease-out;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+h1 {
+    text-align: center;
+    color: #333;
+    margin-bottom: 30px;
+    font-size: 28px;
+    text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+}
+
+/* Form Styles */
+.form-group {
+    margin-bottom: 20px;
+}
+
+label {
+    display: block;
+    margin-bottom: 5px;
+    color: #555;
+    font-weight: bold;
+    font-size: 14px;
+}
+
+input[type="text"],
+input[type="tel"],
+input[type="email"] {
+    width: 100%;
+    padding: 12px;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    font-size: 16px;
+    box-sizing: border-box;
+    transition: all 0.3s ease;
+    background: #fff;
+}
+
+input:focus {
+    border-color: #667eea;
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    transform: translateY(-1px);
+}
+
+input:invalid {
+    border-color: #e74c3c;
+}
+
+input:valid {
+    border-color: #27ae60;
+}
+
+/* Checkbox Group */
+.checkbox-group {
+    display: flex;
+    align-items: flex-start;
+    margin-bottom: 20px;
+    gap: 10px;
+}
+
+.checkbox-group input[type="checkbox"] {
+    margin-top: 4px;
+    margin-right: 0;
+    width: auto;
+    transform: scale(1.2);
+    accent-color: #667eea;
+}
+
+.checkbox-group label {
+    margin-bottom: 0;
+    font-size: 14px;
+    line-height: 1.4;
+    cursor: pointer;
+    flex: 1;
+}
+
+/* Submit Button */
+.submit-btn {
+    width: 100%;
+    padding: 15px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 8px;
+    font-size: 18px;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.submit-btn:before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    transition: left 0.5s;
+}
+
+.submit-btn:hover:before {
+    left: 100%;
+}
+
+.submit-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 16px rgba(0,0,0,0.2);
+}
+
+.submit-btn:active {
+    transform: translateY(0);
+}
+
+.submit-btn:disabled {
+    background: #bdc3c7;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.submit-btn:disabled:before {
+    display: none;
+}
+
+/* Messages */
+.error {
+    color: #e74c3c;
+    margin-top: 10px;
+    text-align: center;
+    font-size: 14px;
+    padding: 10px;
+    background: #ffeaea;
+    border: 1px solid #e74c3c;
+    border-radius: 4px;
+    animation: shake 0.5s ease-in-out;
+}
+
+.success {
+    color: #27ae60;
+    margin-top: 10px;
+    text-align: center;
+    font-size: 14px;
+    padding: 10px;
+    background: #eafaf1;
+    border: 1px solid #27ae60;
+    border-radius: 4px;
+    animation: fadeIn 0.5s ease-in;
+}
+
+@keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-5px); }
+    75% { transform: translateX(5px); }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* Loading Overlay */
+.loading-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.8);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    z-index: 9999;
+}
+
+.loading-overlay.active {
+    display: flex;
+}
+
+.spinner {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #667eea;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    animation: spin 1s linear infinite;
+    margin-bottom: 20px;
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+
+.loading-text {
+    color: white;
+    font-size: 18px;
+    font-weight: bold;
+}
+
+/* Input Validation Feedback */
+.form-group.error input {
+    border-color: #e74c3c;
+    background: #ffeaea;
+}
+
+.form-group.success input {
+    border-color: #27ae60;
+    background: #eafaf1;
+}
+
+.validation-message {
+    font-size: 12px;
+    margin-top: 5px;
+    display: none;
+}
+
+.validation-message.error {
+    color: #e74c3c;
+    display: block;
+}
+
+.validation-message.success {
+    color: #27ae60;
+    display: block;
+}
+
+/* Phone Input Styling */
+input[type="tel"] {
+    font-family: monospace;
+    letter-spacing: 1px;
+}
+
+/* Focus States for Accessibility */
+input:focus,
+button:focus,
+.checkbox-group input:focus {
+    outline: 2px solid #667eea;
+    outline-offset: 2px;
+}
+
+/* Responsive Design */
+@media screen and (max-width: 480px) {
+    body {
+        padding: 10px;
+    }
+    
+    .container {
+        padding: 30px 20px;
+        margin: 10px 0;
+    }
+    
+    h1 {
+        font-size: 24px;
+        margin-bottom: 25px;
+    }
+    
+    input[type="text"],
+    input[type="tel"],
+    input[type="email"] {
+        font-size: 16px; /* Prevent zoom on iOS */
+        padding: 14px;
+    }
+    
+    .submit-btn {
+        padding: 16px;
+        font-size: 16px;
+    }
+    
+    .checkbox-group {
+        align-items: flex-start;
+    }
+    
+    .checkbox-group label {
+        font-size: 13px;
+    }
+}
+
+@media screen and (max-height: 600px) {
+    body {
+        align-items: flex-start;
+        padding-top: 20px;
+    }
+    
+    .container {
+        margin: 0 auto;
+    }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+    .container {
+        background: #2c2c2c;
+        color: white;
+    }
+    
+    input[type="text"],
+    input[type="tel"],
+    input[type="email"] {
+        background: #3c3c3c;
+        border-color: #555;
+        color: white;
+    }
+    
+    input:focus {
+        border-color: #667eea;
+        background: #4c4c4c;
+    }
+    
+    label {
+        color: #ddd;
+    }
+}
