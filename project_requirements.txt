@@ -1,0 +1,44 @@
+Selfie Booth Application - Complete Specification
+Create a web-based selfie booth system with separate kiosk and mobile interfaces. The system should be built in Python Flask with pluggable messaging services.
+🎯 Core Concept
+A kiosk-style photo booth where users register on their mobile devices but the actual photo session happens on the kiosk screen. Users scan a QR code, register, verify with a code displayed on the kiosk, then have their photo taken and sent to their phone.
+🔄 Complete User Workflow
+1. Initial State - Kiosk Display
+
+Large, attractive landing page with QR code
+Step-by-step instructions for users
+Short URL displayed as alternative to QR code
+Manual photo trigger button (for testing)
+Auto-refreshes every 10 seconds
+
+2. Mobile Registration
+
+User scans QR code or visits /mobile URL
+Form requesting: First Name*, Phone Number*, Email (optional)
+Checkbox: "I agree to receive text messages"*
+After submission, user is told to look at kiosk screen for verification code
+
+3. Verification Phase
+
+Kiosk automatically switches to display a large 6-digit random code
+Code expires after 2 minutes
+Mobile device shows verification input page with instructions to look at kiosk
+User enters 6-digit code on their mobile device
+Auto-submits when 6 digits entered
+
+4. Photo Session (Kiosk-Based)
+
+After successful verification, kiosk automatically switches to camera interface
+Mobile device shows success message: "Look at the kiosk screen - your photo session is starting!"
+Kiosk displays: "Hi [Name], smile for the camera! 📸"
+Large camera interface optimized for kiosk displays
+5-second countdown with large numbers
+Takes photo automatically or via manual button
+Shows captured photo for 5 seconds
+Automatically returns to initial QR code state
+
+5. Photo Delivery
+
+Photo sent to user via configured messaging service
+Message includes background change option
+Photo saved locally with timestamp
