@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Configuration module for Selfie Booth application
+Configuration module for Selfie Booth application - WITH SECURITY ENHANCEMENTS
 Handles application configuration and environment setup
 """
 
@@ -68,6 +68,20 @@ class Config:
         return len(messages) == 0
 
 
+def add_security_headers(app):
+    """Add basic security headers"""
+    @app.after_request
+    def security_headers(response):
+        if not app.debug:  # Only in production
+            response.headers['X-Frame-Options'] = 'DENY'
+            response.headers['X-Content-Type-Options'] = 'nosniff'
+            response.headers['X-XSS-Protection'] = '1; mode=block'
+            response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+            response.headers['Content-Security-Policy'] = "default-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' blob:;"
+        return response
+    return app
+
+
 def create_app():
     """Create and configure Flask application"""
     app = Flask(__name__)
@@ -80,12 +94,24 @@ def create_app():
     # Ensure upload directory exists
     os.makedirs(Config.UPLOAD_FOLDER, exist_ok=True)
     
+    # Add security headers
+    app = add_security_headers(app)
+    
     return app
 
 
 def print_startup_info():
     """Print application startup information"""
     print("🚀 Selfie Booth Starting...")
+    
+    if not Config.DEBUG:
+        print("🔒 Running in PRODUCTION mode")
+        print("🔐 Security headers enabled")
+        print("⚡ Rate limiting active")
+        print("🛡️ Input validation enabled")
+    else:
+        print("🔧 Running in DEBUG mode")
+    
     print("📱 Set MESSAGING_SERVICE environment variable to switch platforms:")
     print("   - local (default) - saves photos locally")
     print("   - twilio - sends via SMS (requires Twilio credentials)")

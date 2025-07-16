@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
 """
 Templates module for Selfie Booth application
-Contains all HTML templates for the web interface
+Contains all HTML templates with optimizations for web hosting and tablet use
 """
 
-KIOSK_PAGE = '''
+# Optimized Kiosk Page with Client-Side QR Generation
+KIOSK_PAGE_OPTIMIZED = '''
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -37,84 +38,32 @@ KIOSK_PAGE = '''
             font-size: 48px;
             margin-bottom: 20px;
         }
-        .subtitle {
-            color: #666;
-            font-size: 24px;
-            margin-bottom: 40px;
-        }
-        .qr-section {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 60px;
-            margin: 40px 0;
-        }
-        .qr-code {
-            width: 250px;
-            height: 250px;
+        .qr-info {
             background: #f8f9fa;
+            padding: 30px;
+            border-radius: 15px;
+            margin: 30px 0;
             border: 3px solid #667eea;
-            border-radius: 20px;
+        }
+        .qr-container {
             display: flex;
-            align-items: center;
             justify-content: center;
-            font-size: 18px;
-            color: #667eea;
+            margin: 20px 0;
         }
-        .instructions {
-            max-width: 300px;
-        }
-        .step {
-            background: #f8f9fa;
+        #qrcode {
+            background: white;
             padding: 20px;
-            margin: 15px 0;
-            border-radius: 15px;
-            border-left: 5px solid #667eea;
-        }
-        .step-number {
-            background: #667eea;
-            color: white;
-            border-radius: 50%;
-            width: 30px;
-            height: 30px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            margin-right: 10px;
-            font-weight: bold;
-        }
-        .url-section {
-            margin-top: 40px;
-            padding: 20px;
-            background: #f8f9fa;
-            border-radius: 15px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
         }
         .url {
-            font-size: 32px;
-            font-weight: bold;
+            font-size: 20px;
             color: #667eea;
-            margin-top: 10px;
+            word-break: break-all;
+            margin: 15px 0;
+            font-weight: bold;
         }
-        .footer {
-            margin-top: 30px;
-            color: #888;
-            font-size: 16px;
-        }
-        .trigger-btn {
-            background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 8px;
-            font-size: 16px;
-            cursor: pointer;
-            transition: transform 0.2s;
-            margin: 10px;
-        }
-        .trigger-btn:hover {
-            transform: translateY(-2px);
-        }
-        .debug-info {
+        .tablet-info {
             position: absolute;
             top: 10px;
             right: 10px;
@@ -123,141 +72,144 @@ KIOSK_PAGE = '''
             padding: 10px;
             border-radius: 5px;
             font-size: 12px;
-            max-width: 300px;
+        }
+        .instructions {
+            text-align: left;
+            max-width: 400px;
+            margin: 0 auto;
+        }
+        .instructions ol {
+            font-size: 16px;
+            line-height: 1.6;
+        }
+        .instructions li {
+            margin-bottom: 8px;
+        }
+        @media screen and (max-width: 1024px) {
+            .kiosk-container { padding: 40px 20px; }
+            h1 { font-size: 36px; }
+            .qr-info { padding: 20px; }
         }
     </style>
 </head>
 <body>
-    <div class="debug-info">
-        Status: {{ debug_status }}<br>
-        Last cleanup: {{ last_cleanup }}<br>
-        Time: {{ current_time }}
+    <div class="tablet-info">
+        Tablet: {{ tablet_id }}<br>
+        Location: {{ location }}<br>
+        Status: <span id="status">Ready</span>
     </div>
     
     <div class="kiosk-container">
         <h1>📸 Selfie Booth</h1>
-        <div class="subtitle">Get your photo taken and sent to your phone!</div>
+        <p style="font-size: 24px; color: #666;">Scan QR code or visit URL on your phone!</p>
         
-        <div class="qr-section">
-            <div class="qr-code">
-                <div>
-                    <div>QR Code</div>
-                    <div style="font-size: 14px; margin-top: 10px;">
-                        Scan with your phone camera
-                    </div>
-                </div>
+        <div class="qr-info">
+            <div style="font-size: 18px; margin-bottom: 15px;">📱 Scan QR Code:</div>
+            <div class="qr-container">
+                <div id="qrcode"></div>
             </div>
-            
+            <div style="font-size: 16px; margin-top: 15px;">Or visit directly:</div>
+            <div class="url">{{ mobile_url }}</div>
+        </div>
+        
+        <div style="margin-top: 40px;">
+            <div style="font-size: 18px; margin-bottom: 15px;">📋 Instructions:</div>
             <div class="instructions">
-                <div class="step">
-                    <span class="step-number">1</span>
-                    <strong>Scan QR Code</strong><br>
-                    Use your phone camera to scan the QR code
-                </div>
-                <div class="step">
-                    <span class="step-number">2</span>
-                    <strong>Enter Your Info</strong><br>
-                    Fill out the form on your phone
-                </div>
-                <div class="step">
-                    <span class="step-number">3</span>
-                    <strong>Enter Code</strong><br>
-                    Type the code shown on this screen
-                </div>
-                <div class="step">
-                    <span class="step-number">4</span>
-                    <strong>Smile!</strong><br>
-                    Look at the camera and smile for your photo
-                </div>
-            </div>
-        </div>
-        
-        <div class="url-section">
-            <div>Or visit directly:</div>
-            <div class="url">{{ base_url }}/mobile</div>
-        </div>
-        
-        <div class="footer">
-            Photos will be sent to your phone via text message
-            <div style="margin-top: 20px;">
-                <button id="triggerPhoto" class="trigger-btn">📸 Trigger Photo (Manual)</button>
-                <button id="resetSessions" class="trigger-btn" style="background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);">🔄 Reset Sessions</button>
+                <ol>
+                    <li>Scan QR code with phone camera</li>
+                    <li>Fill out registration form</li>
+                    <li>Enter verification code from this screen</li>
+                    <li>Smile for your photo!</li>
+                </ol>
             </div>
         </div>
     </div>
 
+    <!-- QR Code Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
+    
     <script>
-        // Auto-refresh every 3 seconds to check for new registrations
-        setTimeout(() => {
-            location.reload();
-        }, 3000);
-
-        // Manual photo trigger
-        document.getElementById('triggerPhoto').addEventListener('click', async () => {
-            try {
-                const response = await fetch('/trigger_photo', { method: 'POST' });
-                const result = await response.json();
-                
-                if (result.success) {
-                    if (result.redirect) {
-                        window.location.href = result.redirect;
-                    }
-                } else {
-                    alert('No verified user ready for photo. Please complete mobile registration first.');
-                }
-            } catch (error) {
-                alert('Error triggering photo');
-            }
-        });
-
-        // Reset sessions button
-        document.getElementById('resetSessions').addEventListener('click', async () => {
-            if (confirm('Are you sure you want to reset all sessions? This will clear all pending registrations.')) {
-                try {
-                    const response = await fetch('/admin/reset_sessions', { method: 'POST' });
-                    const result = await response.json();
-                    
-                    if (result.success) {
-                        alert('Sessions reset successfully!');
-                        location.reload();
-                    } else {
-                        alert('Error resetting sessions: ' + result.error);
-                    }
-                } catch (error) {
-                    alert('Error resetting sessions');
-                }
-            }
-        });
-
-        // Manual refresh button for debugging
-        function manualRefresh() {
-            console.log('Manual refresh triggered');
-            location.reload();
+        // Generate QR code on page load
+        function generateQRCode() {
+            const qrContainer = document.getElementById('qrcode');
+            
+            // Clear any existing QR code
+            qrContainer.innerHTML = '';
+            
+            // Create new QR code
+            const qr = new QRious({
+                element: document.createElement('canvas'),
+                value: '{{ mobile_url }}',
+                size: 200,
+                level: 'M'
+            });
+            
+            qrContainer.appendChild(qr.canvas);
         }
         
-        // Add manual refresh button for debugging
-        document.addEventListener('DOMContentLoaded', () => {
-            const debugDiv = document.querySelector('.debug-info');
-            if (debugDiv) {
-                const refreshBtn = document.createElement('button');
-                refreshBtn.textContent = '🔄 Refresh Now';
-                refreshBtn.style.cssText = 'background: #667eea; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; margin-top: 10px; display: block; width: 100%;';
-                refreshBtn.onclick = manualRefresh;
-                debugDiv.appendChild(refreshBtn);
+        // Smart refresh - only reload when session state changes
+        let lastSessionState = '';
+        let refreshCount = 0;
+        
+        async function checkForUpdates() {
+            try {
+                const response = await fetch('/session_check?tablet_id={{ tablet_id }}');
+                const data = await response.json();
+                const currentState = data.session_state;
+                
+                // Update status indicator
+                document.getElementById('status').textContent = currentState === 'default' ? 'Ready' : 
+                    currentState === 'verification' ? 'Verifying' : 
+                    currentState === 'camera' ? 'Photo Session' : 'Ready';
+                
+                // Only reload if session state actually changed and it's not the default state
+                if (lastSessionState && lastSessionState !== currentState && currentState !== 'default') {
+                    console.log(`Session state changed from ${lastSessionState} to ${currentState} - reloading`);
+                    location.reload();
+                }
+                
+                lastSessionState = currentState;
+                refreshCount++;
+                
+                // Debug info
+                console.log(`Check #${refreshCount}: Session state = ${currentState}`);
+                
+            } catch (error) {
+                console.error('Session check failed:', error);
+                document.getElementById('status').textContent = 'Offline';
             }
-        });
+        }
+        
+        // Initialize QR code on page load
+        generateQRCode();
+        
+        // Start session state checking
+        setInterval(checkForUpdates, 3000);
+        
+        // Initial state check
+        checkForUpdates();
+        
+        // Regenerate QR code if it gets corrupted (fallback)
+        setInterval(() => {
+            const qrContainer = document.getElementById('qrcode');
+            if (!qrContainer.hasChildNodes() || qrContainer.children.length === 0) {
+                console.log('QR code missing, regenerating...');
+                generateQRCode();
+            }
+        }, 10000);
     </script>
 </body>
 </html>
 '''
 
-MOBILE_PAGE = '''
+# Optimized Mobile Page
+MOBILE_PAGE_OPTIMIZED = '''
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Selfie Booth - Mobile</title>
+    <title>Selfie Booth - Registration</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -277,92 +229,59 @@ MOBILE_PAGE = '''
             max-width: 400px;
             width: 100%;
         }
-        h1 {
-            text-align: center;
-            color: #333;
-            margin-bottom: 30px;
-        }
-        .form-group {
-            margin-bottom: 20px;
-        }
-        label {
-            display: block;
-            margin-bottom: 5px;
-            color: #555;
-            font-weight: bold;
-        }
+        h1 { text-align: center; color: #333; margin-bottom: 30px; }
+        .form-group { margin-bottom: 20px; }
+        label { display: block; margin-bottom: 5px; color: #555; font-weight: bold; }
         input[type="text"], input[type="tel"], input[type="email"] {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #ddd;
-            border-radius: 8px;
-            font-size: 16px;
-            box-sizing: border-box;
+            width: 100%; padding: 12px; border: 2px solid #ddd; border-radius: 8px;
+            font-size: 16px; box-sizing: border-box;
         }
-        input[type="text"]:focus, input[type="tel"]:focus, input[type="email"]:focus {
-            border-color: #667eea;
-            outline: none;
-        }
-        .checkbox-group {
-            display: flex;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-        .checkbox-group input {
-            margin-right: 10px;
-        }
+        input:focus { border-color: #667eea; outline: none; }
+        .checkbox-group { display: flex; align-items: center; margin-bottom: 20px; }
+        .checkbox-group input { margin-right: 10px; }
         .submit-btn {
-            width: 100%;
-            padding: 15px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            font-size: 18px;
-            cursor: pointer;
+            width: 100%; padding: 15px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white; border: none; border-radius: 8px; font-size: 18px; cursor: pointer;
             transition: transform 0.2s;
         }
-        .submit-btn:hover {
-            transform: translateY(-2px);
+        .submit-btn:hover { transform: translateY(-2px); }
+        .submit-btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+            transform: none;
         }
-        .error {
-            color: #e74c3c;
-            margin-top: 10px;
-            text-align: center;
-        }
-        .instruction {
-            background: #e8f4f8;
-            padding: 15px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-            border-left: 4px solid #667eea;
-        }
+        .error { color: #e74c3c; margin-top: 10px; text-align: center; }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>📸 Selfie Booth</h1>
-        <div class="instruction">
-            <strong>Step 2:</strong> After submitting this form, look at the kiosk screen - your verification code will appear there.
-        </div>
+        
         <form id="userForm">
+            <input type="hidden" name="tablet_id" value="{{ tablet_id }}">
+            <input type="hidden" name="location" value="{{ location }}">
+            
             <div class="form-group">
                 <label for="firstName">First Name *</label>
                 <input type="text" id="firstName" name="firstName" required>
             </div>
+            
             <div class="form-group">
                 <label for="phone">Phone Number *</label>
                 <input type="tel" id="phone" name="phone" placeholder="(555) 123-4567" required>
             </div>
+            
             <div class="form-group">
-                <label for="email">Email Address (Optional)</label>
+                <label for="email">Email (Optional)</label>
                 <input type="email" id="email" name="email">
             </div>
+            
             <div class="checkbox-group">
                 <input type="checkbox" id="consent" name="consent" required>
-                <label for="consent">I agree to receive text messages</label>
+                <label for="consent">I agree to receive my photo via text</label>
             </div>
-            <button type="submit" class="submit-btn">Start Photo Session</button>
+            
+            <button type="submit" class="submit-btn" id="submitBtn">Start Photo Session</button>
             <div id="error" class="error"></div>
         </form>
     </div>
@@ -370,6 +289,14 @@ MOBILE_PAGE = '''
     <script>
         document.getElementById('userForm').addEventListener('submit', async (e) => {
             e.preventDefault();
+            
+            const submitBtn = document.getElementById('submitBtn');
+            const errorDiv = document.getElementById('error');
+            
+            // Disable button and show loading state
+            submitBtn.disabled = true;
+            submitBtn.textContent = 'Registering...';
+            errorDiv.textContent = '';
             
             const formData = new FormData(e.target);
             const data = Object.fromEntries(formData);
@@ -384,12 +311,17 @@ MOBILE_PAGE = '''
                 const result = await response.json();
                 
                 if (result.success) {
+                    submitBtn.textContent = 'Success! Redirecting...';
                     window.location.href = '/verify';
                 } else {
-                    document.getElementById('error').textContent = result.error;
+                    errorDiv.textContent = result.error;
+                    submitBtn.disabled = false;
+                    submitBtn.textContent = 'Start Photo Session';
                 }
             } catch (error) {
-                document.getElementById('error').textContent = 'Something went wrong. Please try again.';
+                errorDiv.textContent = 'Network error. Please try again.';
+                submitBtn.disabled = false;
+                submitBtn.textContent = 'Start Photo Session';
             }
         });
     </script>
@@ -397,7 +329,150 @@ MOBILE_PAGE = '''
 </html>
 '''
 
-KIOSK_VERIFICATION_PAGE = '''
+# Optimized Verify Page
+VERIFY_PAGE_OPTIMIZED = '''
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enter Verification Code</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            max-width: 400px;
+            width: 100%;
+            text-align: center;
+        }
+        h1 { color: #333; margin-bottom: 20px; }
+        .instruction {
+            background: #e8f4f8;
+            padding: 20px;
+            border-radius: 15px;
+            margin: 20px 0;
+            border-left: 4px solid #667eea;
+        }
+        .code-input {
+            font-size: 24px;
+            text-align: center;
+            padding: 15px;
+            border: 3px solid #ddd;
+            border-radius: 10px;
+            width: 200px;
+            margin: 20px 0;
+            letter-spacing: 5px;
+        }
+        .code-input:focus { border-color: #667eea; outline: none; }
+        .verify-btn {
+            padding: 15px 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .verify-btn:hover { transform: translateY(-2px); }
+        .verify-btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .error { color: #e74c3c; margin-top: 15px; }
+        .success { color: #27ae60; margin-top: 15px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📱 Enter Verification Code</h1>
+        
+        <div class="instruction">
+            <strong>Look at the kiosk screen</strong> for your 6-digit verification code
+        </div>
+        
+        <form id="verifyForm">
+            <input type="text" id="codeInput" class="code-input" maxlength="6" placeholder="000000" required>
+            <br>
+            <button type="submit" class="verify-btn" id="verifyBtn">Verify Code</button>
+            <div id="message"></div>
+        </form>
+    </div>
+
+    <script>
+        const codeInput = document.getElementById('codeInput');
+        const verifyBtn = document.getElementById('verifyBtn');
+        const messageDiv = document.getElementById('message');
+        
+        // Auto-focus on input
+        codeInput.focus();
+        
+        // Format input as numbers only
+        codeInput.addEventListener('input', (e) => {
+            e.target.value = e.target.value.replace(/\D/g, '');
+        });
+        
+        document.getElementById('verifyForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const code = codeInput.value;
+            
+            if (code.length !== 6) {
+                messageDiv.innerHTML = '<div class="error">Please enter a 6-digit code</div>';
+                return;
+            }
+            
+            verifyBtn.disabled = true;
+            verifyBtn.textContent = 'Verifying...';
+            messageDiv.innerHTML = '';
+            
+            try {
+                const response = await fetch('/verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ code })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    messageDiv.innerHTML = '<div class="success">✅ Verified! Redirecting...</div>';
+                    setTimeout(() => {
+                        window.location.href = result.redirect || '/photo_session';
+                    }, 1000);
+                } else {
+                    messageDiv.innerHTML = '<div class="error">❌ ' + result.error + '</div>';
+                    verifyBtn.disabled = false;
+                    verifyBtn.textContent = 'Verify Code';
+                    codeInput.focus();
+                    codeInput.select();
+                }
+            } catch (error) {
+                messageDiv.innerHTML = '<div class="error">❌ Network error</div>';
+                verifyBtn.disabled = false;
+                verifyBtn.textContent = 'Verify Code';
+            }
+        });
+    </script>
+</body>
+</html>
+'''
+
+# Verification Display Page (for Kiosk)
+VERIFICATION_DISPLAY_PAGE = '''
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -466,20 +541,6 @@ KIOSK_VERIFICATION_PAGE = '''
             border-radius: 5px;
             color: #856404;
         }
-        .back-link {
-            position: absolute;
-            top: 30px;
-            left: 30px;
-            background: rgba(255,255,255,0.2);
-            color: white;
-            padding: 10px 20px;
-            border-radius: 25px;
-            text-decoration: none;
-            font-size: 16px;
-        }
-        .back-link:hover {
-            background: rgba(255,255,255,0.3);
-        }
         .expires-in {
             font-size: 18px;
             color: #e74c3c;
@@ -489,8 +550,6 @@ KIOSK_VERIFICATION_PAGE = '''
     </style>
 </head>
 <body>
-    <a href="/" class="back-link">← Back to Start</a>
-    
     <div class="verification-container">
         <h1>📱 Verification Required</h1>
         <div class="user-greeting">Hi {{ name }}!</div>
@@ -529,268 +588,26 @@ KIOSK_VERIFICATION_PAGE = '''
             timeLeft--;
         }, 1000);
         
-        // Auto-refresh every 5 seconds to check verification status
+        // Smart refresh - check session state instead of full reload
         setTimeout(() => {
-            location.reload();
+            fetch('/session_check?tablet_id={{ tablet_id }}')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.session_state !== 'verification') {
+                        location.reload();
+                    } else {
+                        location.reload(); // Still in verification, refresh to check timeout
+                    }
+                })
+                .catch(() => location.reload());
         }, 5000);
     </script>
 </body>
 </html>
 '''
 
-KIOSK_CAMERA_PAGE = '''
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Take Your Photo - Selfie Booth</title>
-    <style>
-        body {
-            font-family: 'Arial', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            margin: 0;
-            padding: 20px;
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-        }
-        .greeting {
-            background: white;
-            padding: 30px 60px;
-            border-radius: 25px;
-            margin-bottom: 30px;
-            text-align: center;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
-        }
-        .greeting h1 {
-            color: #667eea;
-            margin: 0;
-            font-size: 48px;
-        }
-        .camera-container {
-            background: white;
-            padding: 40px;
-            border-radius: 30px;
-            box-shadow: 0 30px 60px rgba(0,0,0,0.2);
-            text-align: center;
-            max-width: 900px;
-            width: 90%;
-        }
-        #video {
-            width: 100%;
-            max-width: 700px;
-            border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
-        }
-        #canvas {
-            display: none;
-        }
-        #photoDisplay {
-            display: none;
-            max-width: 700px;
-            width: 100%;
-            border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
-        }
-        .countdown {
-            font-size: 120px;
-            font-weight: bold;
-            color: #e74c3c;
-            margin: 30px 0;
-            min-height: 140px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .controls {
-            margin-top: 30px;
-        }
-        .photo-btn {
-            padding: 25px 50px;
-            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
-            color: white;
-            border: none;
-            border-radius: 15px;
-            font-size: 28px;
-            cursor: pointer;
-            margin: 15px;
-            transition: transform 0.2s;
-        }
-        .photo-btn:hover {
-            transform: translateY(-3px);
-        }
-        .photo-btn:disabled {
-            background: #bdc3c7;
-            cursor: not-allowed;
-            transform: none;
-        }
-        .status {
-            margin-top: 30px;
-            font-size: 28px;
-            font-weight: bold;
-        }
-        .success {
-            color: #27ae60;
-        }
-        .error {
-            color: #e74c3c;
-        }
-        .photo-countdown {
-            font-size: 32px;
-            color: #667eea;
-            margin-top: 20px;
-            font-weight: bold;
-        }
-    </style>
-</head>
-<body>
-    <div class="greeting">
-        <h1>Hi {{ name }}, smile for the camera! 📸</h1>
-    </div>
-    
-    <div class="camera-container">
-        <video id="video" autoplay playsinline></video>
-        <canvas id="canvas"></canvas>
-        <img id="photoDisplay" alt="Your photo">
-        <div id="countdown" class="countdown"></div>
-        <div class="controls">
-            <button id="photoBtn" class="photo-btn">Take Photo</button>
-        </div>
-        <div id="status" class="status"></div>
-        <div id="photoCountdown" class="photo-countdown"></div>
-    </div>
-
-    <script>
-        let video, canvas, ctx, photoDisplay;
-        let countdownInterval;
-        const sessionId = "{{ session_id }}";
-        
-        async function initCamera() {
-            video = document.getElementById('video');
-            canvas = document.getElementById('canvas');
-            photoDisplay = document.getElementById('photoDisplay');
-            ctx = canvas.getContext('2d');
-            
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { width: 1280, height: 720 } 
-                });
-                video.srcObject = stream;
-            } catch (err) {
-                document.getElementById('status').innerHTML = '<div class="error">Camera access denied. Please allow camera access and refresh.</div>';
-            }
-        }
-        
-        function startCountdown() {
-            let count = 5;
-            const countdownEl = document.getElementById('countdown');
-            const photoBtn = document.getElementById('photoBtn');
-            
-            photoBtn.disabled = true;
-            
-            countdownInterval = setInterval(() => {
-                countdownEl.textContent = count;
-                
-                if (count === 0) {
-                    clearInterval(countdownInterval);
-                    countdownEl.textContent = 'Say Cheese! 📸';
-                    setTimeout(() => {
-                        takePhoto();
-                    }, 500);
-                }
-                count--;
-            }, 1000);
-        }
-        
-        async function takePhoto() {
-            const countdownEl = document.getElementById('countdown');
-            const statusEl = document.getElementById('status');
-            const photoCountdownEl = document.getElementById('photoCountdown');
-            
-            // Set canvas size to match video
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            
-            // Draw the frame
-            ctx.drawImage(video, 0, 0);
-            
-            // Get the image data URL
-            const imageDataUrl = canvas.toDataURL('image/jpeg', 0.8);
-            
-            // Hide video and show photo
-            video.style.display = 'none';
-            photoDisplay.src = imageDataUrl;
-            photoDisplay.style.display = 'block';
-            
-            // Convert to blob for upload
-            canvas.toBlob(async (blob) => {
-                const formData = new FormData();
-                formData.append('photo', blob, 'selfie.jpg');
-                formData.append('session_id', sessionId);
-                
-                countdownEl.textContent = '';
-                statusEl.innerHTML = '<div class="success">📱 Sending your photo...</div>';
-                
-                try {
-                    const response = await fetch('/upload_photo', {
-                        method: 'POST',
-                        body: formData
-                    });
-                    
-                    const result = await response.json();
-                    
-                    if (result.success) {
-                        statusEl.innerHTML = '<div class="success">📱 Photo captured! Check your mobile device to review and decide if you want to keep or retake it.</div>';
-                        
-                        // Start 10-second countdown before returning to kiosk
-                        let photoCount = 10;
-                        const photoCountdownInterval = setInterval(() => {
-                            photoCountdownEl.textContent = `Returning to start in ${photoCount} seconds... (unless you choose to retake)`;
-                            
-                            if (photoCount === 0) {
-                                clearInterval(photoCountdownInterval);
-                                window.location.href = '/';
-                            }
-                            photoCount--;
-                        }, 1000);
-                        
-                    } else {
-                        statusEl.innerHTML = '<div class="error">Failed to send photo: ' + result.error + '</div>';
-                        // Reset to camera view on error
-                        video.style.display = 'block';
-                        photoDisplay.style.display = 'none';
-                        document.getElementById('photoBtn').disabled = false;
-                    }
-                } catch (error) {
-                    statusEl.innerHTML = '<div class="error">Something went wrong. Please try again.</div>';
-                    // Reset to camera view on error
-                    video.style.display = 'block';
-                    photoDisplay.style.display = 'none';
-                    document.getElementById('photoBtn').disabled = false;
-                }
-            }, 'image/jpeg', 0.8);
-        }
-        
-        document.getElementById('photoBtn').addEventListener('click', startCountdown);
-        
-        // Initialize camera when page loads
-        initCamera();
-        
-        // Auto-start photo after 3 seconds
-        setTimeout(() => {
-            if (!document.getElementById('photoBtn').disabled) {
-                startCountdown();
-            }
-        }, 3000);
-    </script>
-</body>
-</html>
-'''
-
-PHOTO_SESSION_PAGE = '''
+# Optimized Photo Session Page
+PHOTO_SESSION_PAGE_OPTIMIZED = '''
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -817,10 +634,7 @@ PHOTO_SESSION_PAGE = '''
             width: 100%;
             text-align: center;
         }
-        h1 {
-            color: #333;
-            margin-bottom: 20px;
-        }
+        h1 { color: #333; margin-bottom: 20px; }
         .status {
             font-size: 18px;
             margin: 20px 0;
@@ -858,8 +672,11 @@ PHOTO_SESSION_PAGE = '''
             cursor: pointer;
             transition: transform 0.2s;
         }
-        .btn:hover {
-            transform: translateY(-2px);
+        .btn:hover { transform: translateY(-2px); }
+        .btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+            transform: none;
         }
         .btn-keep {
             background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
@@ -890,12 +707,6 @@ PHOTO_SESSION_PAGE = '''
             border-radius: 10px;
             margin: 20px 0;
         }
-        .countdown {
-            font-size: 24px;
-            font-weight: bold;
-            color: #e74c3c;
-            margin: 15px 0;
-        }
     </style>
 </head>
 <body>
@@ -913,7 +724,7 @@ PHOTO_SESSION_PAGE = '''
         </div>
         
         <div id="buttonGroup" class="button-group">
-            <button id="keepBtn" class="btn btn-keep">✅ Keep Photo</button>
+            <button id="keepBtn" class="btn btn-keep">✅ Send to Phone</button>
             <button id="retakeBtn" class="btn btn-retake">🔄 Retake</button>
         </div>
         
@@ -921,14 +732,11 @@ PHOTO_SESSION_PAGE = '''
             <strong>Photo sent successfully!</strong><br>
             Check your messages for your selfie.
         </div>
-        
-        <div id="retakeCountdown" class="countdown" style="display: none;"></div>
     </div>
 
     <script>
         let sessionId = "{{ session_id }}";
         let photoCheckInterval;
-        let countdownInterval;
         
         // Start checking for photo immediately
         startPhotoCheck();
@@ -971,6 +779,13 @@ PHOTO_SESSION_PAGE = '''
         
         // Keep photo button
         document.getElementById('keepBtn').addEventListener('click', async () => {
+            const keepBtn = document.getElementById('keepBtn');
+            const retakeBtn = document.getElementById('retakeBtn');
+            
+            keepBtn.disabled = true;
+            retakeBtn.disabled = true;
+            keepBtn.textContent = 'Sending...';
+            
             try {
                 const response = await fetch('/keep_photo', {
                     method: 'POST',
@@ -985,18 +800,31 @@ PHOTO_SESSION_PAGE = '''
                     document.getElementById('successMessage').style.display = 'block';
                     
                     setTimeout(() => {
-                        window.location.href = '/';
-                    }, 5000);
+                        window.location.href = '/mobile';
+                    }, 3000);
                 } else {
                     alert('Error sending photo: ' + result.error);
+                    keepBtn.disabled = false;
+                    retakeBtn.disabled = false;
+                    keepBtn.textContent = '✅ Send to Phone';
                 }
             } catch (error) {
-                alert('Error sending photo');
+                alert('Network error sending photo');
+                keepBtn.disabled = false;
+                retakeBtn.disabled = false;
+                keepBtn.textContent = '✅ Send to Phone';
             }
         });
         
         // Retake photo button
         document.getElementById('retakeBtn').addEventListener('click', async () => {
+            const keepBtn = document.getElementById('keepBtn');
+            const retakeBtn = document.getElementById('retakeBtn');
+            
+            keepBtn.disabled = true;
+            retakeBtn.disabled = true;
+            retakeBtn.textContent = 'Starting Retake...';
+            
             try {
                 const response = await fetch('/retake_photo', {
                     method: 'POST',
@@ -1009,27 +837,19 @@ PHOTO_SESSION_PAGE = '''
                 if (result.success) {
                     document.getElementById('photoContainer').style.display = 'none';
                     document.getElementById('buttonGroup').style.display = 'none';
-                    
-                    const countdownEl = document.getElementById('retakeCountdown');
-                    countdownEl.style.display = 'block';
-                    
-                    let count = 5;
-                    countdownInterval = setInterval(() => {
-                        countdownEl.textContent = `New photo session starting in ${count} seconds...`;
-                        count--;
-                        
-                        if (count < 0) {
-                            clearInterval(countdownInterval);
-                            countdownEl.style.display = 'none';
-                            document.getElementById('waitingStatus').style.display = 'block';
-                            startPhotoCheck();
-                        }
-                    }, 1000);
+                    document.getElementById('waitingStatus').style.display = 'block';
+                    startPhotoCheck();
                 } else {
                     alert('Error starting retake: ' + result.error);
+                    keepBtn.disabled = false;
+                    retakeBtn.disabled = false;
+                    retakeBtn.textContent = '🔄 Retake';
                 }
             } catch (error) {
                 alert('Error starting retake');
+                keepBtn.disabled = false;
+                retakeBtn.disabled = false;
+                retakeBtn.textContent = '🔄 Retake';
             }
         });
     </script>
@@ -1037,13 +857,14 @@ PHOTO_SESSION_PAGE = '''
 </html>
 '''
 
-VERIFY_PAGE = '''
+# Optimized Camera Page
+CAMERA_PAGE_OPTIMIZED = '''
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Enter Verification Code - Selfie Booth</title>
+    <title>Take Your Photo - Selfie Booth</title>
     <style>
         body {
             font-family: 'Arial', sans-serif;
@@ -1052,166 +873,235 @@ VERIFY_PAGE = '''
             padding: 20px;
             min-height: 100vh;
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
         }
-        .container {
+        .greeting {
+            background: white;
+            padding: 30px 60px;
+            border-radius: 25px;
+            margin-bottom: 30px;
+            text-align: center;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.2);
+        }
+        .greeting h1 { color: #667eea; margin: 0; font-size: 48px; }
+        .camera-container {
             background: white;
             padding: 40px;
-            border-radius: 20px;
-            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
-            max-width: 400px;
+            border-radius: 30px;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.2);
+            text-align: center;
+            max-width: 900px;
+            width: 90%;
+        }
+        #video {
             width: 100%;
-            text-align: center;
+            max-width: 700px;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
         }
-        h1 {
-            color: #333;
-            margin-bottom: 20px;
+        #canvas { display: none; }
+        #photoDisplay {
+            display: none;
+            max-width: 700px;
+            width: 100%;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.3);
         }
-        .instruction {
-            background: #e8f4f8;
-            padding: 20px;
-            border-radius: 15px;
-            margin: 20px 0;
-            border-left: 4px solid #667eea;
-            font-size: 16px;
-            text-align: left;
-        }
-        .kiosk-icon {
-            font-size: 48px;
-            margin: 20px 0;
-        }
-        .code-input {
-            font-size: 32px;
-            text-align: center;
-            padding: 20px;
-            border: 3px solid #ddd;
-            border-radius: 15px;
-            width: 250px;
-            margin: 30px 0;
-            letter-spacing: 8px;
+        .countdown {
+            font-size: 120px;
             font-weight: bold;
+            color: #e74c3c;
+            margin: 30px 0;
+            min-height: 140px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
-        .code-input:focus {
-            border-color: #667eea;
-            outline: none;
-        }
-        .verify-btn {
-            padding: 15px 40px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        .controls { margin-top: 30px; }
+        .photo-btn {
+            padding: 25px 50px;
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
             color: white;
             border: none;
-            border-radius: 10px;
-            font-size: 18px;
+            border-radius: 15px;
+            font-size: 28px;
             cursor: pointer;
-            margin: 20px 0;
+            margin: 15px;
             transition: transform 0.2s;
         }
-        .verify-btn:hover {
-            transform: translateY(-2px);
-        }
-        .verify-btn:disabled {
+        .photo-btn:hover { transform: translateY(-3px); }
+        .photo-btn:disabled {
             background: #bdc3c7;
             cursor: not-allowed;
             transform: none;
         }
-        .error {
-            color: #e74c3c;
-            margin-top: 15px;
+        .status {
+            margin-top: 30px;
+            font-size: 28px;
             font-weight: bold;
         }
-        .success {
-            color: #27ae60;
-            margin-top: 15px;
-            font-weight: bold;
+        .success { color: #27ae60; }
+        .error { color: #e74c3c; }
+        
+        @media screen and (max-width: 1024px) {
+            .greeting h1 { font-size: 36px; }
+            .camera-container { padding: 20px; }
+            .countdown { font-size: 80px; }
+            .photo-btn { 
+                padding: 20px 40px;
+                font-size: 24px;
+            }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>📱 Enter Verification Code</h1>
-        
-        <div class="kiosk-icon">🖥️</div>
-        
-        <div class="instruction">
-            <strong>Look at the kiosk screen now</strong> - your 6-digit verification code should be displayed there. Enter it below.
+    <div class="greeting">
+        <h1>Hi {{ name }}, smile for the camera! 📸</h1>
+    </div>
+    
+    <div class="camera-container">
+        <video id="video" autoplay playsinline muted></video>
+        <canvas id="canvas"></canvas>
+        <img id="photoDisplay" alt="Your photo">
+        <div id="countdown" class="countdown"></div>
+        <div class="controls">
+            <button id="photoBtn" class="photo-btn">Take Photo</button>
         </div>
-        
-        <form id="verifyForm">
-            <input type="text" 
-                   id="codeInput" 
-                   class="code-input" 
-                   maxlength="6" 
-                   placeholder="000000" 
-                   required
-                   autocomplete="off">
-            <br>
-            <button type="submit" class="verify-btn" id="verifyBtn">Verify Code</button>
-            <div id="message"></div>
-        </form>
+        <div id="status" class="status"></div>
     </div>
 
     <script>
-        const codeInput = document.getElementById('codeInput');
-        const verifyBtn = document.getElementById('verifyBtn');
-        const form = document.getElementById('verifyForm');
+        let video, canvas, ctx, photoDisplay;
+        let countdownInterval;
+        const sessionId = "{{ session_id }}";
         
-        // Auto-focus on input
-        codeInput.focus();
-        
-        // Format input as user types
-        codeInput.addEventListener('input', (e) => {
-            e.target.value = e.target.value.replace(/\\D/g, '');
-            
-            // Auto-submit when 6 digits are entered
-            if (e.target.value.length === 6) {
-                form.dispatchEvent(new Event('submit'));
-            }
-        });
-        
-        form.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            const code = codeInput.value;
-            
-            if (code.length !== 6) {
-                document.getElementById('message').innerHTML = '<div class="error">Please enter a 6-digit code</div>';
-                return;
-            }
-            
-            verifyBtn.disabled = true;
-            verifyBtn.textContent = 'Verifying...';
+        async function initCamera() {
+            video = document.getElementById('video');
+            canvas = document.getElementById('canvas');
+            photoDisplay = document.getElementById('photoDisplay');
+            ctx = canvas.getContext('2d');
             
             try {
-                const response = await fetch('/verify', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ code })
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                        facingMode: 'user'
+                    } 
                 });
+                video.srcObject = stream;
                 
-                const result = await response.json();
+                // Auto-start countdown after 2 seconds
+                setTimeout(() => {
+                    if (!document.getElementById('photoBtn').disabled) {
+                        startCountdown();
+                    }
+                }, 2000);
                 
-                if (result.success) {
-                    document.getElementById('message').innerHTML = '<div class="success">✅ Code verified! Redirecting to photo session...</div>';
-                    setTimeout(() => {
-                        if (result.redirect) {
-                            window.location.href = result.redirect;
-                        }
-                    }, 1000);
-                } else {
-                    document.getElementById('message').innerHTML = '<div class="error">❌ ' + result.error + '</div>';
-                    verifyBtn.disabled = false;
-                    verifyBtn.textContent = 'Verify Code';
-                    codeInput.focus();
-                    codeInput.select();
-                }
-            } catch (error) {
-                document.getElementById('message').innerHTML = '<div class="error">❌ Something went wrong. Please try again.</div>';
-                verifyBtn.disabled = false;
-                verifyBtn.textContent = 'Verify Code';
+            } catch (err) {
+                document.getElementById('status').innerHTML = '<div class="error">Camera access required. Please allow camera access and refresh.</div>';
+                console.error('Camera error:', err);
             }
-        });
+        }
+        
+        function startCountdown() {
+            let count = 5;
+            const countdownEl = document.getElementById('countdown');
+            const photoBtn = document.getElementById('photoBtn');
+            
+            photoBtn.disabled = true;
+            
+            countdownInterval = setInterval(() => {
+                if (count > 0) {
+                    countdownEl.textContent = count;
+                } else {
+                    clearInterval(countdownInterval);
+                    countdownEl.textContent = 'Say Cheese! 📸';
+                    setTimeout(() => {
+                        takePhoto();
+                    }, 500);
+                }
+                count--;
+            }, 1000);
+        }
+        
+        async function takePhoto() {
+            const countdownEl = document.getElementById('countdown');
+            const statusEl = document.getElementById('status');
+            
+            // Set canvas size to match video
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            
+            // Draw the frame
+            ctx.drawImage(video, 0, 0);
+            
+            // Get the image data URL
+            const imageDataUrl = canvas.toDataURL('image/jpeg', 0.8);
+            
+            // Hide video and show photo
+            video.style.display = 'none';
+            photoDisplay.src = imageDataUrl;
+            photoDisplay.style.display = 'block';
+            
+            // Convert to blob for upload
+            canvas.toBlob(async (blob) => {
+                const formData = new FormData();
+                formData.append('photo', blob, 'selfie.jpg');
+                formData.append('session_id', sessionId);
+                
+                countdownEl.textContent = '';
+                statusEl.innerHTML = '<div class="success">📱 Processing your photo...</div>';
+                
+                try {
+                    const response = await fetch('/upload_photo', {
+                        method: 'POST',
+                        body: formData
+                    });
+                    
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        statusEl.innerHTML = '<div class="success">📱 Photo captured! Check your phone to review and send.</div>';
+                        
+                        // Return to kiosk after 8 seconds
+                        setTimeout(() => {
+                            window.location.href = '/';
+                        }, 8000);
+                        
+                    } else {
+                        statusEl.innerHTML = '<div class="error">Failed to capture photo: ' + result.error + '</div>';
+                        resetCamera();
+                    }
+                } catch (error) {
+                    statusEl.innerHTML = '<div class="error">Network error. Please try again.</div>';
+                    resetCamera();
+                }
+            }, 'image/jpeg', 0.8);
+        }
+        
+        function resetCamera() {
+            video.style.display = 'block';
+            photoDisplay.style.display = 'none';
+            document.getElementById('photoBtn').disabled = false;
+            document.getElementById('countdown').textContent = '';
+        }
+        
+        document.getElementById('photoBtn').addEventListener('click', startCountdown);
+        
+        // Initialize camera when page loads
+        initCamera();
     </script>
 </body>
 </html>
 '''
+
+# Legacy templates for backwards compatibility
+KIOSK_PAGE = KIOSK_PAGE_OPTIMIZED
+MOBILE_PAGE = MOBILE_PAGE_OPTIMIZED
+KIOSK_VERIFICATION_PAGE = VERIFICATION_DISPLAY_PAGE
+KIOSK_CAMERA_PAGE = CAMERA_PAGE_OPTIMIZED
+PHOTO_SESSION_PAGE = PHOTO_SESSION_PAGE_OPTIMIZED
+VERIFY_PAGE = VERIFY_PAGE_OPTIMIZED

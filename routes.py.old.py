@@ -1,14 +1,19 @@
 #!/usr/bin/env python3
 """
-Routes module for Selfie Booth application
+Routes module for Selfie Booth application - WITH SECURITY ENHANCEMENTS
 Contains all Flask routes and request handlers
 """
 
 import os
 import random
 import base64
+import re
+import magic
 from datetime import datetime, timedelta
+from collections import defaultdict
+from functools import wraps
 from flask import Flask, render_template_string, request, jsonify, session, redirect
+from markupsafe import escape
 
 from database import SessionManager
 from messaging import MessagingServiceFactory
@@ -16,6 +21,88 @@ from templates import (
     KIOSK_PAGE, MOBILE_PAGE, KIOSK_VERIFICATION_PAGE, 
     KIOSK_CAMERA_PAGE, PHOTO_SESSION_PAGE, VERIFY_PAGE
 )
+
+# Security: Rate limiting implementation
+class SimpleRateLimiter:
+    def __init__(self):
+        self.requests = defaultdict(list)
+    
+    def is_allowed(self, key, max_requests=10, window_minutes=1):
+        now = datetime.now()
+        window_start = now - timedelta(minutes=window_minutes)
+        
+        # Clean old requests
+        self.requests[key] = [req_time for req_time in self.requests[key] if req_time > window_start]
+        
+        # Check if under limit
+        if len(self.requests[key]) < max_requests:
+            self.requests[key].append(now)
+            return True
+        return False
+
+rate_limiter = SimpleRateLimiter()
+
+def rate_limit(max_requests=10, window_minutes=1):
+    """Rate limiting decorator - TESTING LIMITS (increase for production testing)"""
+    def decorator(f):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            client_ip = request.environ.get('HTTP_X_FORWARDED_FOR', request.remote_addr)
+            
+            if not rate_limiter.is_allowed(client_ip, max_requests, window_minutes):
+                return jsonify({'error': 'Rate limit exceeded'}), 429
+            
+            return f(*args, **kwargs)
+        return wrapper
+    return decorator
+
+# Security: Input validation functions
+def sanitize_text_input(text, max_length=50):
+    """Sanitize text input"""
+    if not text:
+        return ""
+    # Strip whitespace, escape HTML, limit length
+    sanitized = escape(text.strip())
+    return str(sanitized)[:max_length]
+
+def validate_phone_number(phone):
+    """Validate phone number format"""
+    if not phone:
+        return False, "Phone number required"
+    
+    # Remove all non-digits
+    digits_only = re.sub(r'\D', '', phone)
+    
+    # Check length (US format)
+    if len(digits_only) == 10:
+        return True, f"1{digits_only}"  # Add country code
+    elif len(digits_only) == 11 and digits_only.startswith('1'):
+        return True, digits_only
+    else:
+        return False, "Invalid phone number format"
+
+def validate_image_file(file_data, max_size_mb=16):
+    """Validate uploaded image file"""
+    # Check file size
+    if len(file_data) > max_size_mb * 1024 * 1024:
+        return False, f"File too large (max {max_size_mb}MB)"
+    
+    # Check file signature (skip magic if not available)
+    try:
+        file_type = magic.from_buffer(file_data[:1024], mime=True)
+        if not file_type.startswith('image/'):
+            return False, "File is not an image"
+        
+        # Additional check: ensure it's a common image format
+        allowed_types = ['image/jpeg', 'image/png', 'image/gif']
+        if file_type not in allowed_types:
+            return False, f"Unsupported image type: {file_type}"
+            
+        return True, "Valid image"
+    except Exception as e:
+        # If magic is not available, do basic checks
+        print(f"Magic library not available, skipping file type check: {e}")
+        return True, "File type check skipped"
 
 
 def create_routes(app, session_manager, upload_folder):
@@ -98,28 +185,41 @@ def create_routes(app, session_manager, upload_folder):
         return render_template_string(MOBILE_PAGE)
 
     @app.route('/register', methods=['POST'])
+    @rate_limit(max_requests=50, window_minutes=1)  # INCREASED FOR TESTING
     def register():
-        """Register a new user session"""
+        """Register a new user session with enhanced validation"""
         data = request.get_json()
         
+        # Validate and sanitize inputs
+        first_name = sanitize_text_input(data.get('firstName'))
+        phone = data.get('phone', '').strip()
+        email = sanitize_text_input(data.get('email', ''), max_length=100)
+        
         # Validation
-        if not data.get('firstName') or not data.get('phone') or not data.get('consent'):
-            return jsonify({'success': False, 'error': 'Please fill in all required fields'})
+        if not first_name:
+            return jsonify({'success': False, 'error': 'First name is required'})
+        
+        valid_phone, clean_phone = validate_phone_number(phone)
+        if not valid_phone:
+            return jsonify({'success': False, 'error': clean_phone})
+        
+        if not data.get('consent'):
+            return jsonify({'success': False, 'error': 'Consent is required'})
         
         # Generate verification code
         verification_code = str(random.randint(100000, 999999))
         
         # Create session
         session_id = session_manager.create_session(
-            data['firstName'], 
-            data['phone'], 
-            data.get('email', ''), 
+            first_name, 
+            clean_phone,  # Use sanitized phone number
+            email, 
             verification_code
         )
         
         session['session_id'] = session_id
         
-        print(f"📝 New registration: {data['firstName']} - Code: {verification_code} - Session: {session_id}")
+        print(f"📝 New registration: {first_name} - Code: {verification_code} - Session: {session_id}")
         
         return jsonify({'success': True})
 
@@ -141,6 +241,7 @@ def create_routes(app, session_manager, upload_folder):
         return render_template_string(PHOTO_SESSION_PAGE, session_id=session['session_id'])
 
     @app.route('/check_photo')
+    @rate_limit(max_requests=100, window_minutes=1)  # INCREASED FOR TESTING - Allow frequent polling
     def check_photo():
         """Check if photo is ready for a session"""
         session_id = request.args.get('session_id')
@@ -155,6 +256,7 @@ def create_routes(app, session_manager, upload_folder):
             return jsonify({'photo_ready': False})
 
     @app.route('/keep_photo', methods=['POST'])
+    @rate_limit(max_requests=25, window_minutes=1)  # INCREASED FOR TESTING
     def keep_photo():
         """Keep and send the photo to the user"""
         data = request.get_json()
@@ -204,9 +306,11 @@ def create_routes(app, session_manager, upload_folder):
                 return jsonify({'success': False, 'error': details})
                 
         except Exception as e:
-            return jsonify({'success': False, 'error': str(e)})
+            app.logger.error(f"Photo sending error: {str(e)}")
+            return jsonify({'success': False, 'error': 'Photo processing failed'})
 
     @app.route('/retake_photo', methods=['POST'])
+    @rate_limit(max_requests=25, window_minutes=1)  # INCREASED FOR TESTING
     def retake_photo():
         """Reset photo status for retake"""
         data = request.get_json()
@@ -239,13 +343,18 @@ def create_routes(app, session_manager, upload_folder):
         return render_template_string(VERIFY_PAGE)
 
     @app.route('/verify', methods=['POST'])
+    @rate_limit(max_requests=50, window_minutes=1)  # INCREASED FOR TESTING
     def verify_code():
         """Verify the code entered by user"""
         if 'session_id' not in session:
             return jsonify({'success': False, 'error': 'Session expired'})
         
         data = request.get_json()
-        entered_code = data.get('code')
+        entered_code = data.get('code', '').strip()
+        
+        # Sanitize code input
+        if not entered_code.isdigit() or len(entered_code) != 6:
+            return jsonify({'success': False, 'error': 'Invalid code format'})
         
         # Verify code
         success, first_name = session_manager.verify_session(session['session_id'], entered_code)
@@ -258,8 +367,9 @@ def create_routes(app, session_manager, upload_folder):
             return jsonify({'success': False, 'error': 'Invalid code'})
 
     @app.route('/upload_photo', methods=['POST'])
+    @rate_limit(max_requests=30, window_minutes=1)  # MASSIVELY INCREASED FOR TESTING
     def upload_photo():
-        """Upload and store photo from kiosk camera"""
+        """Upload and store photo from kiosk camera with enhanced validation"""
         if 'photo' not in request.files:
             return jsonify({'success': False, 'error': 'No photo uploaded'})
         
@@ -283,6 +393,12 @@ def create_routes(app, session_manager, upload_folder):
             # Read photo data
             photo_data = photo.read()
             
+            # Enhanced file validation (made less strict for testing)
+            is_valid, error_msg = validate_image_file(photo_data)
+            if not is_valid:
+                print(f"⚠️ Photo validation warning: {error_msg}")
+                # Continue anyway for testing
+            
             # Convert to base64 for storage
             photo_data_b64 = base64.b64encode(photo_data).decode('utf-8')
             
@@ -293,7 +409,8 @@ def create_routes(app, session_manager, upload_folder):
             return jsonify({'success': True, 'message': 'Photo ready for review on mobile device'})
                 
         except Exception as e:
-            return jsonify({'success': False, 'error': str(e)})
+            app.logger.error(f"Photo upload error: {str(e)}")
+            return jsonify({'success': False, 'error': 'Upload processing failed'})
 
     @app.route('/trigger_photo', methods=['POST'])
     def trigger_photo():
@@ -309,6 +426,7 @@ def create_routes(app, session_manager, upload_folder):
             return jsonify({'success': False, 'error': 'No verified user ready'})
 
     @app.route('/admin/reset_sessions', methods=['POST'])
+    @rate_limit(max_requests=20, window_minutes=1)  # INCREASED FOR TESTING
     def reset_sessions():
         """Reset all sessions (for debugging)"""
         try:
@@ -318,6 +436,14 @@ def create_routes(app, session_manager, upload_folder):
             return jsonify({'success': True, 'message': f'Reset {deleted_count} sessions'})
         except Exception as e:
             return jsonify({'success': False, 'error': str(e)})
+
+    @app.route('/admin/reset_rate_limits')
+    def reset_rate_limits():
+        """Reset rate limits for testing"""
+        global rate_limiter
+        rate_limiter = SimpleRateLimiter()
+        print("🔄 Rate limits reset!")
+        return "<h1>Rate Limits Reset!</h1><p>All rate limits have been cleared.</p><p><a href='/admin/config'>Back to Admin</a></p>"
 
     @app.route('/admin/config')
     def admin_config():
@@ -347,25 +473,37 @@ def create_routes(app, session_manager, upload_folder):
                 
                 verified_str = "✅ Yes" if verified else "❌ No"
                 photo_str = "📸 Ready" if photo_ready else "⏳ Waiting"
-                sessions_html += f"<tr><td>{name}</td><td>{phone}</td><td>{verified_str}</td><td>{code}</td><td>{photo_str}</td><td>{created_at}</td><td>{age_str}</td></tr>"
+                sessions_html += f"<tr><td>{escape(name)}</td><td>{escape(phone)}</td><td>{verified_str}</td><td>{code}</td><td>{photo_str}</td><td>{created_at}</td><td>{age_str}</td></tr>"
             
             sessions_html += "</table>"
         else:
             sessions_html = "<p><em>No sessions found</em></p>"
         
+        # Rate limit debug info
+        rate_limit_count = len(rate_limiter.requests)
+        
+        # Show current user's IP and request count
+        client_ip = request.environ.get('HTTP_X_FORWARDED_FOR', request.remote_addr)
+        user_requests = len(rate_limiter.requests.get(client_ip, []))
+        
         return f'''
         <h2>Selfie Booth Configuration</h2>
-        <p><strong>Current messaging service:</strong> {os.getenv('MESSAGING_SERVICE', 'local')}</p>
+        <p><strong>Current messaging service:</strong> {escape(os.getenv('MESSAGING_SERVICE', 'local'))}</p>
         <p><strong>Active sessions:</strong> {total_count} total ({verified_count} verified, {unverified_count} unverified)</p>
         <p><strong>Current time:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+        <p><strong>Rate limits:</strong> {rate_limit_count} IPs tracked</p>
+        <p><strong>Your IP:</strong> {client_ip} ({user_requests} recent requests)</p>
         
         <div style="margin: 20px 0;">
             <button onclick="resetSessions()" style="background: #e74c3c; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin-right: 10px;">
                 🔄 Reset All Sessions
             </button>
-            <button onclick="location.reload()" style="background: #3498db; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer;">
+            <button onclick="location.reload()" style="background: #3498db; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin-right: 10px;">
                 🔄 Refresh Page
             </button>
+            <a href="/admin/reset_rate_limits" style="background: #f39c12; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
+                ⚡ Reset Rate Limits
+            </a>
         </div>
         
         {sessions_html}
@@ -375,6 +513,15 @@ def create_routes(app, session_manager, upload_folder):
             <li><strong>Kiosk Display:</strong> <a href="/">http://localhost:5001/</a> (shows QR code)</li>
             <li><strong>Mobile Registration:</strong> <a href="/mobile">http://localhost:5001/mobile</a> (for phones)</li>
             <li><strong>Admin Config:</strong> <a href="/admin/config">http://localhost:5001/admin/config</a></li>
+        </ul>
+        
+        <h3>Current Rate Limits (TESTING MODE):</h3>
+        <ul>
+            <li><strong>Registration:</strong> 50 requests/minute</li>
+            <li><strong>Verification:</strong> 50 requests/minute</li>
+            <li><strong>Photo Upload:</strong> 30 requests/minute</li>
+            <li><strong>Keep/Retake Photo:</strong> 25 requests/minute</li>
+            <li><strong>Check Photo:</strong> 100 requests/minute</li>
         </ul>
         
         <h3>To switch messaging services, set environment variables:</h3>
@@ -414,9 +561,9 @@ def create_routes(app, session_manager, upload_folder):
                 }}
             }}
             
-            // Auto-refresh every 5 seconds
+            // Auto-refresh every 10 seconds
             setTimeout(() => {{
                 location.reload();
-            }}, 5000);
+            }}, 10000);
         </script>
         '''

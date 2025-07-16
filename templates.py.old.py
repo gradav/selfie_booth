@@ -1,165 +1,9 @@
 #!/usr/bin/env python3
 """
-Selfie Booth Application
-A web-based selfie booth that validates users and sends photos via SMS/email
+Templates module for Selfie Booth application
+Contains all HTML templates for the web interface
 """
 
-import os
-import random
-import sqlite3
-import smtplib
-import base64
-from datetime import datetime, timedelta
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from email.mime.image import MIMEImage
-from flask import Flask, render_template_string, request, jsonify, session, redirect
-from werkzeug.utils import secure_filename
-import secrets
-
-app = Flask(__name__)
-app.secret_key = secrets.token_hex(16)
-app.config['UPLOAD_FOLDER'] = 'photos'
-app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
-
-# Ensure upload directory exists
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-
-# Database setup
-def init_db():
-    conn = sqlite3.connect('selfie_booth.db')
-    cursor = conn.cursor()
-    cursor.execute('''
-        CREATE TABLE IF NOT EXISTS sessions (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            session_id TEXT UNIQUE,
-            phone TEXT,
-            first_name TEXT,
-            email TEXT,
-            verification_code TEXT,
-            verified BOOLEAN DEFAULT FALSE,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            photo_path TEXT
-        )
-    ''')
-    conn.commit()
-    conn.close()
-
-def cleanup_old_sessions():
-    """Remove sessions older than 30 minutes to prevent database buildup"""
-    conn = sqlite3.connect('selfie_booth.db')
-    cursor = conn.cursor()
-    
-    # Delete sessions older than 30 minutes (but keep recent ones for debugging)
-    thirty_minutes_ago = datetime.now() - timedelta(minutes=30)
-    cursor.execute('''
-        SELECT COUNT(*) FROM sessions WHERE created_at < ?
-    ''', (thirty_minutes_ago.isoformat(),))
-    old_count = cursor.fetchone()[0]
-    
-    if old_count > 0:
-        cursor.execute('''
-            DELETE FROM sessions WHERE created_at < ?
-        ''', (thirty_minutes_ago.isoformat(),))
-        
-        deleted_count = cursor.rowcount
-        conn.commit()
-        print(f"🧹 Cleaned up {deleted_count} old sessions (older than 30 minutes)")
-    
-    conn.close()
-
-# Messaging Interface - Easy to swap implementations
-class MessagingService:
-    def send_photo(self, phone, photo_data, message):
-        raise NotImplementedError
-
-class TwilioService(MessagingService):
-    def __init__(self, account_sid=None, auth_token=None, from_number=None):
-        self.account_sid = account_sid or os.getenv('TWILIO_ACCOUNT_SID')
-        self.auth_token = auth_token or os.getenv('TWILIO_AUTH_TOKEN')
-        self.from_number = from_number or os.getenv('TWILIO_FROM_NUMBER')
-        
-    def send_photo(self, phone, photo_data, message):
-        try:
-            from twilio.rest import Client
-            client = Client(self.account_sid, self.auth_token)
-            
-            # Save photo temporarily for Twilio
-            temp_path = f"temp_{datetime.now().timestamp()}.jpg"
-            with open(temp_path, 'wb') as f:
-                f.write(photo_data)
-            
-            # Send MMS
-            message = client.messages.create(
-                body=message,
-                media_url=[f"file://{os.path.abspath(temp_path)}"],
-                from_=self.from_number,
-                to=phone
-            )
-            
-            # Cleanup
-            os.remove(temp_path)
-            return True, f"Photo sent via Twilio: {message.sid}"
-        except Exception as e:
-            return False, f"Twilio error: {str(e)}"
-
-class EmailService(MessagingService):
-    def __init__(self, smtp_server="smtp.gmail.com", smtp_port=587, email=None, password=None):
-        self.smtp_server = smtp_server
-        self.smtp_port = smtp_port
-        self.email = email or os.getenv('EMAIL_ADDRESS')
-        self.password = password or os.getenv('EMAIL_PASSWORD')
-        
-    def send_photo(self, recipient_email, photo_data, message):
-        try:
-            msg = MIMEMultipart()
-            msg['From'] = self.email
-            msg['To'] = recipient_email
-            msg['Subject'] = "Your Selfie Booth Photo!"
-            
-            # Add text
-            msg.attach(MIMEText(message, 'plain'))
-            
-            # Add photo
-            img = MIMEImage(photo_data)
-            img.add_header('Content-Disposition', 'attachment', filename='selfie.jpg')
-            msg.attach(img)
-            
-            # Send
-            with smtplib.SMTP(self.smtp_server, self.smtp_port) as server:
-                server.starttls()
-                server.login(self.email, self.password)
-                server.send_message(msg)
-            
-            return True, "Photo sent via email"
-        except Exception as e:
-            return False, f"Email error: {str(e)}"
-
-class LocalStorageService(MessagingService):
-    def send_photo(self, identifier, photo_data, message):
-        try:
-            filename = f"photo_{identifier}_{datetime.now().timestamp()}.jpg"
-            filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            
-            with open(filepath, 'wb') as f:
-                f.write(photo_data)
-            
-            return True, f"Photo saved locally: {filepath}"
-        except Exception as e:
-            return False, f"Local storage error: {str(e)}"
-
-# Configure messaging service (change this to switch platforms)
-def get_messaging_service():
-    service_type = os.getenv('MESSAGING_SERVICE', 'local')  # local, twilio, email
-    
-    if service_type == 'twilio':
-        return TwilioService()
-    elif service_type == 'email':
-        return EmailService()
-    else:
-        return LocalStorageService()
-
-# HTML Templates
 KIOSK_PAGE = '''
 <!DOCTYPE html>
 <html lang="en">
@@ -343,19 +187,18 @@ KIOSK_PAGE = '''
     </div>
 
     <script>
-        // Auto-refresh every 3 seconds to check for new registrations (faster refresh)
+        // Auto-refresh every 3 seconds to check for new registrations
         setTimeout(() => {
             location.reload();
         }, 3000);
 
-        // Manual photo trigger (for testing or manual operation)
+        // Manual photo trigger
         document.getElementById('triggerPhoto').addEventListener('click', async () => {
             try {
                 const response = await fetch('/trigger_photo', { method: 'POST' });
                 const result = await response.json();
                 
                 if (result.success) {
-                    // Redirect to camera page if user is verified
                     if (result.redirect) {
                         window.location.href = result.redirect;
                     }
@@ -367,7 +210,7 @@ KIOSK_PAGE = '''
             }
         });
 
-        // Reset sessions button (for debugging)
+        // Reset sessions button
         document.getElementById('resetSessions').addEventListener('click', async () => {
             if (confirm('Are you sure you want to reset all sessions? This will clear all pending registrations.')) {
                 try {
@@ -900,12 +743,12 @@ KIOSK_CAMERA_PAGE = '''
                     const result = await response.json();
                     
                     if (result.success) {
-                        statusEl.innerHTML = '<div class="success">📱 Photo sent! Check your messages.</div>';
+                        statusEl.innerHTML = '<div class="success">📱 Photo captured! Check your mobile device to review and decide if you want to keep or retake it.</div>';
                         
-                        // Start 5-second countdown before returning to kiosk
-                        let photoCount = 5;
+                        // Start 10-second countdown before returning to kiosk
+                        let photoCount = 10;
                         const photoCountdownInterval = setInterval(() => {
-                            photoCountdownEl.textContent = `Returning to start in ${photoCount} seconds...`;
+                            photoCountdownEl.textContent = `Returning to start in ${photoCount} seconds... (unless you choose to retake)`;
                             
                             if (photoCount === 0) {
                                 clearInterval(photoCountdownInterval);
@@ -936,12 +779,259 @@ KIOSK_CAMERA_PAGE = '''
         // Initialize camera when page loads
         initCamera();
         
-        // Auto-start photo after 3 seconds (optional - remove if you want manual trigger only)
+        // Auto-start photo after 3 seconds
         setTimeout(() => {
             if (!document.getElementById('photoBtn').disabled) {
                 startCountdown();
             }
         }, 3000);
+    </script>
+</body>
+</html>
+'''
+
+PHOTO_SESSION_PAGE = '''
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Photo Session - Selfie Booth</title>
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            max-width: 500px;
+            width: 100%;
+            text-align: center;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .status {
+            font-size: 18px;
+            margin: 20px 0;
+            padding: 20px;
+            border-radius: 10px;
+        }
+        .waiting {
+            background: #e8f4f8;
+            color: #2c3e50;
+            border-left: 4px solid #3498db;
+        }
+        .photo-container {
+            margin: 30px 0;
+            display: none;
+        }
+        .photo {
+            max-width: 100%;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        .button-group {
+            display: none;
+            gap: 15px;
+            margin-top: 30px;
+            flex-wrap: wrap;
+        }
+        .btn {
+            flex: 1;
+            min-width: 120px;
+            padding: 15px 25px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        .btn-keep {
+            background: linear-gradient(135deg, #27ae60 0%, #2ecc71 100%);
+            color: white;
+        }
+        .btn-retake {
+            background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+            color: white;
+        }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .success-msg {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+        }
+        .countdown {
+            font-size: 24px;
+            font-weight: bold;
+            color: #e74c3c;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📸 Photo Session</h1>
+        
+        <div id="waitingStatus" class="status waiting">
+            <div>Look at the kiosk screen - your photo session is starting!</div>
+            <div class="spinner"></div>
+            <div>Waiting for photo to be taken...</div>
+        </div>
+        
+        <div id="photoContainer" class="photo-container">
+            <img id="photoImage" class="photo" alt="Your selfie">
+        </div>
+        
+        <div id="buttonGroup" class="button-group">
+            <button id="keepBtn" class="btn btn-keep">✅ Keep Photo</button>
+            <button id="retakeBtn" class="btn btn-retake">🔄 Retake</button>
+        </div>
+        
+        <div id="successMessage" class="success-msg" style="display: none;">
+            <strong>Photo sent successfully!</strong><br>
+            Check your messages for your selfie.
+        </div>
+        
+        <div id="retakeCountdown" class="countdown" style="display: none;"></div>
+    </div>
+
+    <script>
+        let sessionId = "{{ session_id }}";
+        let photoCheckInterval;
+        let countdownInterval;
+        
+        // Start checking for photo immediately
+        startPhotoCheck();
+        
+        function startPhotoCheck() {
+            photoCheckInterval = setInterval(checkForPhoto, 2000);
+        }
+        
+        function stopPhotoCheck() {
+            if (photoCheckInterval) {
+                clearInterval(photoCheckInterval);
+                photoCheckInterval = null;
+            }
+        }
+        
+        async function checkForPhoto() {
+            try {
+                const response = await fetch(`/check_photo?session_id=${sessionId}`);
+                const result = await response.json();
+                
+                if (result.photo_ready) {
+                    stopPhotoCheck();
+                    showPhoto(result.photo_data);
+                }
+            } catch (error) {
+                console.error('Error checking for photo:', error);
+            }
+        }
+        
+        function showPhoto(photoData) {
+            document.getElementById('waitingStatus').style.display = 'none';
+            
+            const photoContainer = document.getElementById('photoContainer');
+            const photoImage = document.getElementById('photoImage');
+            photoImage.src = `data:image/jpeg;base64,${photoData}`;
+            photoContainer.style.display = 'block';
+            
+            document.getElementById('buttonGroup').style.display = 'flex';
+        }
+        
+        // Keep photo button
+        document.getElementById('keepBtn').addEventListener('click', async () => {
+            try {
+                const response = await fetch('/keep_photo', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionId })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    document.getElementById('buttonGroup').style.display = 'none';
+                    document.getElementById('successMessage').style.display = 'block';
+                    
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 5000);
+                } else {
+                    alert('Error sending photo: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error sending photo');
+            }
+        });
+        
+        // Retake photo button
+        document.getElementById('retakeBtn').addEventListener('click', async () => {
+            try {
+                const response = await fetch('/retake_photo', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ session_id: sessionId })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    document.getElementById('photoContainer').style.display = 'none';
+                    document.getElementById('buttonGroup').style.display = 'none';
+                    
+                    const countdownEl = document.getElementById('retakeCountdown');
+                    countdownEl.style.display = 'block';
+                    
+                    let count = 5;
+                    countdownInterval = setInterval(() => {
+                        countdownEl.textContent = `New photo session starting in ${count} seconds...`;
+                        count--;
+                        
+                        if (count < 0) {
+                            clearInterval(countdownInterval);
+                            countdownEl.style.display = 'none';
+                            document.getElementById('waitingStatus').style.display = 'block';
+                            startPhotoCheck();
+                        }
+                    }, 1000);
+                } else {
+                    alert('Error starting retake: ' + result.error);
+                }
+            } catch (error) {
+                alert('Error starting retake');
+            }
+        });
     </script>
 </body>
 </html>
@@ -1071,7 +1161,7 @@ VERIFY_PAGE = '''
         
         // Format input as user types
         codeInput.addEventListener('input', (e) => {
-            e.target.value = e.target.value.replace(/\\D/g, ''); // Only numbers
+            e.target.value = e.target.value.replace(/\\D/g, '');
             
             // Auto-submit when 6 digits are entered
             if (e.target.value.length === 6) {
@@ -1102,8 +1192,12 @@ VERIFY_PAGE = '''
                 const result = await response.json();
                 
                 if (result.success) {
-                    document.getElementById('message').innerHTML = '<div class="success">✅ Code verified! Look at the kiosk screen - your photo session is starting!</div>';
-                    // Don't redirect - let the kiosk handle the camera
+                    document.getElementById('message').innerHTML = '<div class="success">✅ Code verified! Redirecting to photo session...</div>';
+                    setTimeout(() => {
+                        if (result.redirect) {
+                            window.location.href = result.redirect;
+                        }
+                    }, 1000);
                 } else {
                     document.getElementById('message').innerHTML = '<div class="error">❌ ' + result.error + '</div>';
                     verifyBtn.disabled = false;
@@ -1121,433 +1215,3 @@ VERIFY_PAGE = '''
 </body>
 </html>
 '''
-
-# Routes
-@app.route('/')
-def kiosk():
-    """Kiosk display page - shows QR code, verification code, or camera"""
-    # Clean up old sessions first
-    cleanup_old_sessions()
-    
-    conn = sqlite3.connect('selfie_booth.db')
-    cursor = conn.cursor()
-    
-    debug_status = "Default QR screen"
-    current_time = datetime.now().strftime('%H:%M:%S')
-    last_cleanup = "Just now"
-    
-    # Debug: Show all sessions
-    cursor.execute('SELECT session_id, first_name, verified, created_at FROM sessions ORDER BY created_at DESC')
-    all_sessions = cursor.fetchall()
-    print(f"🔍 Debug - All sessions: {all_sessions}")
-    
-    # Check if there's a verified user ready for photo (within 3 minutes)
-    cursor.execute('''
-        SELECT first_name, session_id, created_at FROM sessions 
-        WHERE verified = 1
-        ORDER BY created_at DESC 
-        LIMIT 1
-    ''')
-    verified_result = cursor.fetchone()
-    
-    if verified_result:
-        first_name, session_id, created_at = verified_result
-        print(f"🔍 Found verified session: {first_name}, {session_id}, {created_at}")
-        try:
-            # Handle different timestamp formats
-            if 'T' in created_at:
-                created_time = datetime.fromisoformat(created_at)
-            else:
-                created_time = datetime.fromisoformat(created_at.replace(' ', 'T'))
-            
-            time_diff = datetime.now() - created_time
-            if time_diff < timedelta(minutes=3):
-                debug_status = f"Camera mode for {first_name} (verified {time_diff.total_seconds():.0f}s ago)"
-                print(f"🎥 Showing camera interface for {first_name}")
-                cursor.close()
-                conn.close()
-                return render_template_string(KIOSK_CAMERA_PAGE, name=first_name, session_id=session_id)
-            else:
-                print(f"⏰ Verified session for {first_name} expired ({time_diff.total_seconds():.0f}s ago)")
-        except (ValueError, TypeError) as e:
-            print(f"⚠️ Error parsing timestamp {created_at}: {e}")
-    
-    # Check if there's a recent registration waiting for verification
-    cursor.execute('''
-        SELECT first_name, verification_code, created_at FROM sessions 
-        WHERE verified = 0 OR verified = FALSE
-        ORDER BY created_at DESC 
-        LIMIT 1
-    ''')
-    unverified_result = cursor.fetchone()
-    
-    if unverified_result:
-        first_name, verification_code, created_at = unverified_result
-        print(f"🔍 Found unverified session: {first_name}, {verification_code}, {created_at}")
-        try:
-            # Handle different timestamp formats
-            if 'T' in created_at:
-                created_time = datetime.fromisoformat(created_at)
-            else:
-                created_time = datetime.fromisoformat(created_at.replace(' ', 'T'))
-            
-            time_diff = datetime.now() - created_time
-            if time_diff < timedelta(minutes=2):
-                debug_status = f"Verification for {first_name} (registered {time_diff.total_seconds():.0f}s ago)"
-                print(f"🔢 Showing verification code {verification_code} for {first_name}")
-                cursor.close()
-                conn.close()
-                return render_template_string(KIOSK_VERIFICATION_PAGE, 
-                                            name=first_name, 
-                                            code=verification_code)
-            else:
-                print(f"⏰ Unverified session for {first_name} expired ({time_diff.total_seconds():.0f}s ago)")
-        except (ValueError, TypeError) as e:
-            print(f"⚠️ Error parsing timestamp {created_at}: {e}")
-    
-    cursor.close()
-    conn.close()
-    
-    # Show normal kiosk page (default state)
-    print(f"🏠 Showing default kiosk page - No active sessions found")
-    base_url = request.host_url.rstrip('/')
-    return render_template_string(KIOSK_PAGE, 
-                                base_url=base_url,
-                                debug_status=debug_status,
-                                current_time=current_time,
-                                last_cleanup=last_cleanup)
-
-@app.route('/mobile')
-def mobile():
-    """Mobile registration page - accessed via QR code"""
-    return render_template_string(MOBILE_PAGE)
-
-@app.route('/register', methods=['POST'])
-def register():
-    data = request.get_json()
-    
-    # Validation
-    if not data.get('firstName') or not data.get('phone') or not data.get('consent'):
-        return jsonify({'success': False, 'error': 'Please fill in all required fields'})
-    
-    # Generate verification code
-    verification_code = str(random.randint(100000, 999999))
-    
-    # Store in database
-    conn = sqlite3.connect('selfie_booth.db')
-    cursor = conn.cursor()
-    
-    session_id = secrets.token_urlsafe(16)
-    session['session_id'] = session_id
-    
-    # Explicitly set verified=FALSE and use current timestamp
-    current_time = datetime.now().isoformat()
-    cursor.execute('''
-        INSERT OR REPLACE INTO sessions (session_id, phone, first_name, email, verification_code, verified, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-    ''', (session_id, data['phone'], data['firstName'], data.get('email', ''), verification_code, False, current_time))
-    
-    conn.commit()
-    conn.close()
-    
-    print(f"📝 New registration: {data['firstName']} - Code: {verification_code} - Session: {session_id}")
-    
-    return jsonify({'success': True})
-
-@app.route('/verify')
-def verify_page():
-    if 'session_id' not in session:
-        return redirect('/mobile')
-    
-    # Check if session exists and is not verified
-    conn = sqlite3.connect('selfie_booth.db')
-    cursor = conn.cursor()
-    cursor.execute('SELECT verified FROM sessions WHERE session_id = ?', (session['session_id'],))
-    result = cursor.fetchone()
-    conn.close()
-    
-    if not result:
-        return redirect('/mobile')
-    
-    if result[0]:  # Already verified
-        return redirect('/')
-    
-    return render_template_string(VERIFY_PAGE)
-
-@app.route('/verify', methods=['POST'])
-def verify_code():
-    if 'session_id' not in session:
-        return jsonify({'success': False, 'error': 'Session expired'})
-    
-    data = request.get_json()
-    entered_code = data.get('code')
-    
-    # Check code
-    conn = sqlite3.connect('selfie_booth.db')
-    cursor = conn.cursor()
-    cursor.execute('''
-        SELECT verification_code, first_name FROM sessions 
-        WHERE session_id = ? AND verification_code = ?
-    ''', (session['session_id'], entered_code))
-    
-    result = cursor.fetchone()
-    
-    if result:
-        # Mark as verified with explicit value
-        cursor.execute('''
-            UPDATE sessions SET verified = 1 WHERE session_id = ?
-        ''', (session['session_id'],))
-        conn.commit()
-        conn.close()
-        
-        print(f"✅ Verification successful for {result[1]} - Session: {session['session_id']}")
-        return jsonify({'success': True})
-    else:
-        conn.close()
-        print(f"❌ Verification failed for session {session.get('session_id')} - Code: {entered_code}")
-        return jsonify({'success': False, 'error': 'Invalid code'})
-
-@app.route('/upload_photo', methods=['POST'])
-def upload_photo():
-    if 'photo' not in request.files:
-        return jsonify({'success': False, 'error': 'No photo uploaded'})
-    
-    photo = request.files['photo']
-    if photo.filename == '':
-        return jsonify({'success': False, 'error': 'No photo selected'})
-    
-    # Get session_id from form data (sent from kiosk) or session (from mobile)
-    session_id = request.form.get('session_id') or session.get('session_id')
-    
-    if not session_id:
-        return jsonify({'success': False, 'error': 'No session found'})
-    
-    # Get user info
-    conn = sqlite3.connect('selfie_booth.db')
-    cursor = conn.cursor()
-    cursor.execute('''
-        SELECT phone, first_name, email, verified FROM sessions WHERE session_id = ?
-    ''', (session_id,))
-    result = cursor.fetchone()
-    
-    if not result or not result[3]:  # Not verified
-        conn.close()
-        return jsonify({'success': False, 'error': 'Not verified'})
-    
-    phone, first_name, email, verified = result
-    
-    try:
-        # Read photo data
-        photo_data = photo.read()
-        
-        # Send photo using configured messaging service
-        messaging_service = get_messaging_service()
-        message = f"Hi {first_name}! Here's your selfie from the photo booth. Reply 'background' to change the background!"
-        
-        # Use phone for SMS services, email for email service, or session_id for local storage
-        recipient = email if isinstance(messaging_service, EmailService) and email else phone
-        if isinstance(messaging_service, LocalStorageService):
-            recipient = session_id
-            
-        success, details = messaging_service.send_photo(recipient, photo_data, message)
-        
-        if success:
-            # Save photo path in database
-            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-            photo_filename = f"selfie_{session_id}_{timestamp}.jpg"
-            photo_path = os.path.join(app.config['UPLOAD_FOLDER'], photo_filename)
-            
-            with open(photo_path, 'wb') as f:
-                f.write(photo_data)
-            
-            cursor.execute('''
-                UPDATE sessions SET photo_path = ? WHERE session_id = ?
-            ''', (photo_path, session_id))
-            conn.commit()
-            
-            # Clean up this completed session
-            cursor.execute('DELETE FROM sessions WHERE session_id = ?', (session_id,))
-            conn.commit()
-            
-            conn.close()
-            print(f"📸 Photo sent successfully for {first_name}")
-            return jsonify({'success': True, 'message': details})
-        else:
-            conn.close()
-            return jsonify({'success': False, 'error': details})
-            
-    except Exception as e:
-        conn.close()
-        return jsonify({'success': False, 'error': str(e)})
-
-@app.route('/trigger_photo', methods=['POST'])
-def trigger_photo():
-    """Manual photo trigger from kiosk (for testing or manual operation)"""
-    # Check if there's a verified user ready for photo
-    conn = sqlite3.connect('selfie_booth.db')
-    cursor = conn.cursor()
-    cursor.execute('''
-        SELECT session_id FROM sessions 
-        WHERE verified = TRUE 
-        ORDER BY created_at DESC 
-        LIMIT 1
-    ''')
-    result = cursor.fetchone()
-    conn.close()
-    
-    if result:
-        # Set the session and redirect to camera
-        session['session_id'] = result[0]
-        return jsonify({'success': True, 'redirect': '/camera'})
-    else:
-        return jsonify({'success': False, 'error': 'No verified user ready'})
-
-@app.route('/admin/reset_sessions', methods=['POST'])
-def reset_sessions():
-    """Reset all sessions (for debugging)"""
-    try:
-        conn = sqlite3.connect('selfie_booth.db')
-        cursor = conn.cursor()
-        cursor.execute('DELETE FROM sessions')
-        deleted_count = cursor.rowcount
-        conn.commit()
-        conn.close()
-        
-        print(f"🔄 Reset {deleted_count} sessions")
-        return jsonify({'success': True, 'message': f'Reset {deleted_count} sessions'})
-    except Exception as e:
-        return jsonify({'success': False, 'error': str(e)})
-
-# Configuration endpoint for switching services
-@app.route('/admin/config')
-def admin_config():
-    # Get current session count
-    conn = sqlite3.connect('selfie_booth.db')
-    cursor = conn.cursor()
-    cursor.execute('SELECT COUNT(*) FROM sessions')
-    session_count = cursor.fetchone()[0]
-    
-    cursor.execute('SELECT COUNT(*) FROM sessions WHERE verified = 1 OR verified = TRUE')
-    verified_count = cursor.fetchone()[0]
-    
-    cursor.execute('SELECT COUNT(*) FROM sessions WHERE verified = 0 OR verified = FALSE')
-    unverified_count = cursor.fetchone()[0]
-    
-    # Get recent sessions for debugging
-    cursor.execute('''
-        SELECT session_id, first_name, phone, verified, verification_code, created_at 
-        FROM sessions 
-        ORDER BY created_at DESC 
-        LIMIT 10
-    ''')
-    recent_sessions = cursor.fetchall()
-    
-    conn.close()
-    
-    sessions_html = ""
-    if recent_sessions:
-        sessions_html = "<h3>Recent Sessions (Last 10):</h3><table border='1' style='border-collapse: collapse; width: 100%;'>"
-        sessions_html += "<tr><th>Name</th><th>Phone</th><th>Verified</th><th>Code</th><th>Created</th><th>Age</th></tr>"
-        
-        for session in recent_sessions:
-            session_id, name, phone, verified, code, created_at = session
-            try:
-                if 'T' in created_at:
-                    created_time = datetime.fromisoformat(created_at)
-                else:
-                    created_time = datetime.fromisoformat(created_at.replace(' ', 'T'))
-                age = datetime.now() - created_time
-                age_str = f"{age.total_seconds():.0f}s ago"
-            except:
-                age_str = "Unknown"
-            
-            verified_str = "✅ Yes" if verified else "❌ No"
-            sessions_html += f"<tr><td>{name}</td><td>{phone}</td><td>{verified_str}</td><td>{code}</td><td>{created_at}</td><td>{age_str}</td></tr>"
-        
-        sessions_html += "</table>"
-    else:
-        sessions_html = "<p><em>No sessions found</em></p>"
-    
-    return f'''
-    <h2>Selfie Booth Configuration</h2>
-    <p><strong>Current messaging service:</strong> {os.getenv('MESSAGING_SERVICE', 'local')}</p>
-    <p><strong>Active sessions:</strong> {session_count} total ({verified_count} verified, {unverified_count} unverified)</p>
-    <p><strong>Current time:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
-    
-    <div style="margin: 20px 0;">
-        <button onclick="resetSessions()" style="background: #e74c3c; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin-right: 10px;">
-            🔄 Reset All Sessions
-        </button>
-        <button onclick="location.reload()" style="background: #3498db; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer;">
-            🔄 Refresh Page
-        </button>
-    </div>
-    
-    {sessions_html}
-    
-    <h3>URL Structure:</h3>
-    <ul>
-        <li><strong>Kiosk Display:</strong> <a href="/">http://localhost:5001/</a> (shows QR code)</li>
-        <li><strong>Mobile Registration:</strong> <a href="/mobile">http://localhost:5001/mobile</a> (for phones)</li>
-        <li><strong>Admin Config:</strong> <a href="/admin/config">http://localhost:5001/admin/config</a></li>
-    </ul>
-    
-    <h3>To switch messaging services, set environment variables:</h3>
-    <ul>
-        <li><strong>Local Storage:</strong> MESSAGING_SERVICE=local (default)</li>
-        <li><strong>Twilio:</strong> MESSAGING_SERVICE=twilio, TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER</li>
-        <li><strong>Email:</strong> MESSAGING_SERVICE=email, EMAIL_ADDRESS, EMAIL_PASSWORD</li>
-    </ul>
-    
-    <h3>QR Code Setup:</h3>
-    <p>Generate a QR code pointing to: <strong>http://your-domain.com/mobile</strong></p>
-    
-    <h3>Debugging Steps:</h3>
-    <ol>
-        <li><strong>Test Mobile Registration:</strong> <a href="/mobile" target="_blank">Open mobile page</a></li>
-        <li><strong>Check Kiosk Display:</strong> <a href="/" target="_blank">Open kiosk page</a></li>
-        <li><strong>Monitor Server Console:</strong> Watch the terminal for debug messages</li>
-        <li><strong>Reset if Stuck:</strong> Use the reset button above</li>
-    </ol>
-    
-    <script>
-        async function resetSessions() {{
-            if (confirm('Are you sure you want to reset all sessions?')) {{
-                try {{
-                    const response = await fetch('/admin/reset_sessions', {{ method: 'POST' }});
-                    const result = await response.json();
-                    
-                    if (result.success) {{
-                        alert('Sessions reset successfully!');
-                        location.reload();
-                    }} else {{
-                        alert('Error: ' + result.error);
-                    }}
-                }} catch (error) {{
-                    alert('Error resetting sessions');
-                }}
-            }}
-        }}
-        
-        // Auto-refresh every 5 seconds
-        setTimeout(() => {{
-            location.reload();
-        }}, 5000);
-    </script>
-    '''
-
-if __name__ == '__main__':
-    init_db()
-    print("🚀 Selfie Booth Starting...")
-    print("📱 Set MESSAGING_SERVICE environment variable to switch platforms:")
-    print("   - local (default) - saves photos locally")
-    print("   - twilio - sends via SMS (requires Twilio credentials)")
-    print("   - email - sends via email (requires email credentials)")
-    print("\n🌐 URLs:")
-    print("   - Kiosk Display: http://localhost:5001/ (connect monitor/TV here)")
-    print("   - Mobile Registration: http://localhost:5001/mobile (for QR code)")
-    print("   - Admin Config: http://localhost:5001/admin/config")
-    print("\n📋 Create QR code pointing to: http://localhost:5001/mobile")
-    print("\n🔧 Debug: Check admin panel for session status")
-    
-    app.run(debug=True, host='0.0.0.0', port=5001)

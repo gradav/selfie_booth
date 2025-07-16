@@ -1,53 +1,62 @@
 #!/usr/bin/env python3
 """
-Routes module for Selfie Booth application - WITH SECURITY ENHANCEMENTS
-Contains all Flask routes and request handlers
+Fixed Routes module - Direct route registration like the original
 """
 
 import os
 import random
 import base64
 import re
-import magic
+import uuid
 from datetime import datetime, timedelta
 from collections import defaultdict
 from functools import wraps
-from flask import Flask, render_template_string, request, jsonify, session, redirect
+from flask import request, jsonify, session, redirect, render_template_string
 from markupsafe import escape
 
-from database import SessionManager
-from messaging import MessagingServiceFactory
+# Import templates
 from templates import (
-    KIOSK_PAGE, MOBILE_PAGE, KIOSK_VERIFICATION_PAGE, 
-    KIOSK_CAMERA_PAGE, PHOTO_SESSION_PAGE, VERIFY_PAGE
+    KIOSK_PAGE_OPTIMIZED, MOBILE_PAGE_OPTIMIZED, VERIFY_PAGE_OPTIMIZED,
+    PHOTO_SESSION_PAGE_OPTIMIZED, CAMERA_PAGE_OPTIMIZED, VERIFICATION_DISPLAY_PAGE
 )
 
-# Security: Rate limiting implementation
-class SimpleRateLimiter:
+# Rate limiting
+class UnifiedRateLimiter:
     def __init__(self):
         self.requests = defaultdict(list)
+        self.last_cleanup = datetime.now()
+    
+    def cleanup_old_requests(self):
+        now = datetime.now()
+        if now - self.last_cleanup > timedelta(minutes=5):
+            cutoff = now - timedelta(minutes=10)
+            for ip in list(self.requests.keys()):
+                self.requests[ip] = [req_time for req_time in self.requests[ip] if req_time > cutoff]
+                if not self.requests[ip]:
+                    del self.requests[ip]
+            self.last_cleanup = now
     
     def is_allowed(self, key, max_requests=10, window_minutes=1):
+        self.cleanup_old_requests()
         now = datetime.now()
         window_start = now - timedelta(minutes=window_minutes)
-        
-        # Clean old requests
         self.requests[key] = [req_time for req_time in self.requests[key] if req_time > window_start]
         
-        # Check if under limit
         if len(self.requests[key]) < max_requests:
             self.requests[key].append(now)
             return True
         return False
 
-rate_limiter = SimpleRateLimiter()
+# Global rate limiter
+rate_limiter = UnifiedRateLimiter()
 
 def rate_limit(max_requests=10, window_minutes=1):
-    """Rate limiting decorator"""
     def decorator(f):
         @wraps(f)
         def wrapper(*args, **kwargs):
-            client_ip = request.environ.get('HTTP_X_FORWARDED_FOR', request.remote_addr)
+            client_ip = request.headers.get('X-Forwarded-For', 
+                       request.headers.get('X-Real-IP', 
+                       request.remote_addr))
             
             if not rate_limiter.is_allowed(client_ip, max_requests, window_minutes):
                 return jsonify({'error': 'Rate limit exceeded'}), 429
@@ -56,144 +65,141 @@ def rate_limit(max_requests=10, window_minutes=1):
         return wrapper
     return decorator
 
-# Security: Input validation functions
+# Input validation
 def sanitize_text_input(text, max_length=50):
-    """Sanitize text input"""
     if not text:
         return ""
-    # Strip whitespace, escape HTML, limit length
     sanitized = escape(text.strip())
     return str(sanitized)[:max_length]
 
 def validate_phone_number(phone):
-    """Validate phone number format"""
     if not phone:
         return False, "Phone number required"
     
-    # Remove all non-digits
     digits_only = re.sub(r'\D', '', phone)
     
-    # Check length (US format)
     if len(digits_only) == 10:
-        return True, f"1{digits_only}"  # Add country code
+        return True, f"1{digits_only}"
     elif len(digits_only) == 11 and digits_only.startswith('1'):
         return True, digits_only
     else:
         return False, "Invalid phone number format"
 
-def validate_image_file(file_data, max_size_mb=16):
-    """Validate uploaded image file"""
-    # Check file size
-    if len(file_data) > max_size_mb * 1024 * 1024:
-        return False, f"File too large (max {max_size_mb}MB)"
-    
-    # Check file signature
-    try:
-        file_type = magic.from_buffer(file_data[:1024], mime=True)
-        if not file_type.startswith('image/'):
-            return False, "File is not an image"
-        
-        # Additional check: ensure it's a common image format
-        allowed_types = ['image/jpeg', 'image/png', 'image/gif']
-        if file_type not in allowed_types:
-            return False, f"Unsupported image type: {file_type}"
-            
-        return True, "Valid image"
-    except Exception as e:
-        return False, f"File validation error: {str(e)}"
+def get_tablet_id():
+    tablet_id = session.get('tablet_id')
+    if not tablet_id:
+        tablet_id = str(uuid.uuid4())[:8]
+        session['tablet_id'] = tablet_id
+    return tablet_id
 
+def get_location():
+    location = request.args.get('location') or session.get('location', 'default')
+    session['location'] = location
+    return location
 
-def create_routes(app, session_manager, upload_folder):
-    """Create and register all routes with the Flask app"""
+def get_short_url_for_tablet(tablet_id, base_url):
+    from config import Config
+    return Config.get_short_url_for_tablet(tablet_id, base_url)
+
+# Global variables to store managers (set by register_routes)
+session_manager = None
+messaging_factory = None
+upload_folder = None
+
+def register_routes(app, sm, mf, uf):
+    """Register all routes - called from app.py"""
+    global session_manager, messaging_factory, upload_folder
+    session_manager = sm
+    messaging_factory = mf
+    upload_folder = uf
     
+    print("🔗 Registering routes...")
+    
+    # Root redirect
     @app.route('/')
+    def root():
+        return redirect('/selfie_booth/')
+    
+    # Kiosk display
+    @app.route('/selfie_booth/')
     def kiosk():
-        """Kiosk display page - shows QR code, verification code, or camera"""
-        # Clean up old sessions first
+        tablet_id = get_tablet_id()
+        location = get_location()
+        
         session_manager.cleanup_old_sessions()
         
-        debug_status = "Default QR screen"
-        current_time = datetime.now().strftime('%H:%M:%S')
-        last_cleanup = "Just now"
-        
-        # Debug: Show all sessions
-        all_sessions = session_manager.get_all_sessions_debug()
-        print(f"🔍 Debug - All sessions: {all_sessions}")
-        
-        # Check if there's a verified user ready for photo
-        verified_result = session_manager.get_verified_session()
-        
+        # Check for verified session ready for photo
+        verified_result = session_manager.get_verified_session(tablet_id)
         if verified_result:
             first_name, session_id, created_at = verified_result
-            print(f"🔍 Found verified session: {first_name}, {session_id}, {created_at}")
             try:
-                # Handle different timestamp formats
-                if 'T' in created_at:
-                    created_time = datetime.fromisoformat(created_at)
+                if isinstance(created_at, datetime):
+                    created_time = created_at
                 else:
-                    created_time = datetime.fromisoformat(created_at.replace(' ', 'T'))
+                    created_time = datetime.fromisoformat(str(created_at).replace('Z', '+00:00'))
                 
                 time_diff = datetime.now() - created_time
                 if time_diff < timedelta(minutes=3):
-                    debug_status = f"Camera mode for {first_name} (verified {time_diff.total_seconds():.0f}s ago)"
-                    print(f"🎥 Showing camera interface for {first_name}")
-                    return render_template_string(KIOSK_CAMERA_PAGE, name=first_name, session_id=session_id)
-                else:
-                    print(f"⏰ Verified session for {first_name} expired ({time_diff.total_seconds():.0f}s ago)")
+                    return render_template_string(CAMERA_PAGE_OPTIMIZED, 
+                                                name=first_name, 
+                                                session_id=session_id)
             except (ValueError, TypeError) as e:
                 print(f"⚠️ Error parsing timestamp {created_at}: {e}")
         
-        # Check if there's a recent registration waiting for verification
-        unverified_result = session_manager.get_unverified_session()
-        
+        # Check for unverified session
+        unverified_result = session_manager.get_unverified_session(tablet_id)
         if unverified_result:
             first_name, verification_code, created_at = unverified_result
-            print(f"🔍 Found unverified session: {first_name}, {verification_code}, {created_at}")
             try:
-                # Handle different timestamp formats
-                if 'T' in created_at:
-                    created_time = datetime.fromisoformat(created_at)
+                if isinstance(created_at, datetime):
+                    created_time = created_at
                 else:
-                    created_time = datetime.fromisoformat(created_at.replace(' ', 'T'))
+                    created_time = datetime.fromisoformat(str(created_at).replace('Z', '+00:00'))
                 
                 time_diff = datetime.now() - created_time
                 if time_diff < timedelta(minutes=2):
-                    debug_status = f"Verification for {first_name} (registered {time_diff.total_seconds():.0f}s ago)"
-                    print(f"🔢 Showing verification code {verification_code} for {first_name}")
-                    return render_template_string(KIOSK_VERIFICATION_PAGE, 
-                                                name=first_name, 
-                                                code=verification_code)
-                else:
-                    print(f"⏰ Unverified session for {first_name} expired ({time_diff.total_seconds():.0f}s ago)")
+                    return render_template_string(VERIFICATION_DISPLAY_PAGE,
+                                                name=first_name,
+                                                code=verification_code,
+                                                tablet_id=tablet_id)
             except (ValueError, TypeError) as e:
                 print(f"⚠️ Error parsing timestamp {created_at}: {e}")
         
-        # Show normal kiosk page (default state)
-        print(f"🏠 Showing default kiosk page - No active sessions found")
+        # Default kiosk page
         base_url = request.host_url.rstrip('/')
-        return render_template_string(KIOSK_PAGE, 
-                                    base_url=base_url,
-                                    debug_status=debug_status,
-                                    current_time=current_time,
-                                    last_cleanup=last_cleanup)
-
-    @app.route('/mobile')
+        short_url = get_short_url_for_tablet(tablet_id, base_url)
+        
+        return render_template_string(KIOSK_PAGE_OPTIMIZED,
+                                    tablet_id=tablet_id,
+                                    location=location,
+                                    mobile_url=short_url)
+    
+    # Mobile registration
+    @app.route('/selfie_booth/mobile')
     def mobile():
-        """Mobile registration page - accessed via QR code"""
-        return render_template_string(MOBILE_PAGE)
-
-    @app.route('/register', methods=['POST'])
-    @rate_limit(max_requests=5, window_minutes=1)  # Prevent registration spam
+        tablet_id = request.args.get('tablet_id') or get_tablet_id()
+        location = request.args.get('location') or get_location()
+        
+        session['tablet_id'] = tablet_id
+        session['location'] = location
+        
+        return render_template_string(MOBILE_PAGE_OPTIMIZED, 
+                                    tablet_id=tablet_id,
+                                    location=location)
+    
+    # Registration endpoint
+    @app.route('/selfie_booth/register', methods=['POST'])
+    @rate_limit(max_requests=50, window_minutes=1)
     def register():
-        """Register a new user session with enhanced validation"""
         data = request.get_json()
         
-        # Validate and sanitize inputs
+        tablet_id = data.get('tablet_id') or session.get('tablet_id')
+        location = data.get('location') or session.get('location')
+        
         first_name = sanitize_text_input(data.get('firstName'))
         phone = data.get('phone', '').strip()
         email = sanitize_text_input(data.get('email', ''), max_length=100)
         
-        # Validation
         if not first_name:
             return jsonify({'success': False, 'error': 'First name is required'})
         
@@ -204,90 +210,136 @@ def create_routes(app, session_manager, upload_folder):
         if not data.get('consent'):
             return jsonify({'success': False, 'error': 'Consent is required'})
         
-        # Generate verification code
         verification_code = str(random.randint(100000, 999999))
         
-        # Create session
         session_id = session_manager.create_session(
-            first_name, 
-            clean_phone,  # Use sanitized phone number
-            email, 
-            verification_code
+            first_name, clean_phone, email, verification_code, tablet_id, location
         )
         
-        session['session_id'] = session_id
-        
-        print(f"📝 New registration: {first_name} - Code: {verification_code} - Session: {session_id}")
-        
-        return jsonify({'success': True})
-
-    @app.route('/photo_session')
-    def photo_session():
-        """Photo session page for mobile users"""
+        if session_id:
+            session['session_id'] = session_id
+            session['tablet_id'] = tablet_id
+            session['location'] = location
+            
+            print(f"📝 New registration: {first_name} - Code: {verification_code} - Tablet: {tablet_id}")
+            return jsonify({'success': True})
+        else:
+            return jsonify({'success': False, 'error': 'Registration failed'})
+    
+    # Verification page
+    @app.route('/selfie_booth/verify')
+    def verify_page():
         if 'session_id' not in session:
-            return redirect('/mobile')
+            return redirect('/selfie_booth/mobile')
         
-        # Check if session exists and is verified
+        return render_template_string(VERIFY_PAGE_OPTIMIZED)
+    
+    # Verification endpoint
+    @app.route('/selfie_booth/verify', methods=['POST'])
+    @rate_limit(max_requests=25, window_minutes=1)
+    def verify_code():
+        if 'session_id' not in session:
+            return jsonify({'success': False, 'error': 'Session expired'})
+        
+        data = request.get_json()
+        entered_code = data.get('code', '').strip()
+        
+        if not entered_code.isdigit() or len(entered_code) != 6:
+            return jsonify({'success': False, 'error': 'Invalid code format'})
+        
+        success, first_name = session_manager.verify_session(session['session_id'], entered_code)
+        
+        if success:
+            print(f"✅ Verification successful for {first_name}")
+            return jsonify({'success': True, 'redirect': '/selfie_booth/photo_session'})
+        else:
+            return jsonify({'success': False, 'error': 'Invalid code'})
+    
+    # Photo session
+    @app.route('/selfie_booth/photo_session')
+    def photo_session():
+        if 'session_id' not in session:
+            return redirect('/selfie_booth/mobile')
+        
         result = session_manager.get_session_by_id(session['session_id'])
+        if not result or not result[6]:
+            return redirect('/selfie_booth/verify')
         
-        if not result:
-            return redirect('/mobile')
+        return render_template_string(PHOTO_SESSION_PAGE_OPTIMIZED, 
+                                    session_id=session['session_id'])
+    
+    # Upload photo
+    @app.route('/selfie_booth/upload_photo', methods=['POST'])
+    @rate_limit(max_requests=15, window_minutes=1)
+    def upload_photo():
+        if 'photo' not in request.files:
+            return jsonify({'success': False, 'error': 'No photo uploaded'})
         
-        if not result[6]:  # verified column
-            return redirect('/verify')
+        photo = request.files['photo']
+        session_id = request.form.get('session_id') or session.get('session_id')
         
-        return render_template_string(PHOTO_SESSION_PAGE, session_id=session['session_id'])
-
-    @app.route('/check_photo')
-    @rate_limit(max_requests=30, window_minutes=1)  # Allow frequent polling but prevent abuse
+        if not session_id:
+            return jsonify({'success': False, 'error': 'No session found'})
+        
+        result = session_manager.get_session_by_id(session_id)
+        if not result or not result[6]:
+            return jsonify({'success': False, 'error': 'Session not verified'})
+        
+        try:
+            photo_data = photo.read()
+            photo_data_b64 = base64.b64encode(photo_data).decode('utf-8')
+            session_manager.update_photo_data(session_id, photo_data_b64)
+            
+            print(f"📸 Photo uploaded for session: {session_id}")
+            return jsonify({'success': True, 'message': 'Photo ready for review'})
+            
+        except Exception as e:
+            return jsonify({'success': False, 'error': 'Upload failed'})
+    
+    # Check photo
+    @app.route('/selfie_booth/check_photo')
+    @rate_limit(max_requests=30, window_minutes=1)
     def check_photo():
-        """Check if photo is ready for a session"""
         session_id = request.args.get('session_id')
         if not session_id:
-            return jsonify({'photo_ready': False, 'error': 'No session ID'})
+            return jsonify({'photo_ready': False})
         
         result = session_manager.get_photo_data(session_id)
         
-        if result and result[0]:  # photo_ready is True
+        if result and result[0]:
             return jsonify({'photo_ready': True, 'photo_data': result[1]})
         else:
             return jsonify({'photo_ready': False})
-
-    @app.route('/keep_photo', methods=['POST'])
-    @rate_limit(max_requests=3, window_minutes=1)  # Prevent photo sending spam
+    
+    # Keep photo
+    @app.route('/selfie_booth/keep_photo', methods=['POST'])
+    @rate_limit(max_requests=10, window_minutes=1)
     def keep_photo():
-        """Keep and send the photo to the user"""
         data = request.get_json()
         session_id = data.get('session_id')
         
         if not session_id:
             return jsonify({'success': False, 'error': 'No session ID'})
         
-        # Get session data
         result = session_manager.get_session_data(session_id)
-        
         if not result:
             return jsonify({'success': False, 'error': 'Session not found'})
         
         phone, first_name, email, photo_data_b64 = result
         
         try:
-            # Decode photo data
             photo_data = base64.b64decode(photo_data_b64)
             
-            # Send photo using configured messaging service
-            messaging_service = MessagingServiceFactory.create_service(upload_folder=upload_folder)
-            message = f"Hi {first_name}! Here's your selfie from the photo booth. Reply 'background' to change the background!"
+            messaging_service = messaging_factory.create_service(upload_folder=upload_folder)
+            message = f"Hi {first_name}! Here's your selfie from the photo booth!"
             
-            # Get appropriate recipient
-            recipient = MessagingServiceFactory.get_recipient_for_service(
+            recipient = messaging_factory.get_recipient_for_service(
                 messaging_service, phone, email, session_id
             )
             
             success, details = messaging_service.send_photo(recipient, photo_data, message)
             
             if success:
-                # Save photo file locally too
                 timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
                 photo_filename = f"selfie_{session_id}_{timestamp}.jpg"
                 photo_path = os.path.join(upload_folder, photo_filename)
@@ -295,7 +347,6 @@ def create_routes(app, session_manager, upload_folder):
                 with open(photo_path, 'wb') as f:
                     f.write(photo_data)
                 
-                # Clean up this completed session
                 session_manager.delete_session(session_id)
                 
                 print(f"📸 Photo sent successfully for {first_name}")
@@ -304,234 +355,126 @@ def create_routes(app, session_manager, upload_folder):
                 return jsonify({'success': False, 'error': details})
                 
         except Exception as e:
-            app.logger.error(f"Photo sending error: {str(e)}")
-            return jsonify({'success': False, 'error': 'Photo processing failed'})
-
-    @app.route('/retake_photo', methods=['POST'])
-    @rate_limit(max_requests=5, window_minutes=1)  # Prevent retake spam
+            return jsonify({'success': False, 'error': 'Sending failed'})
+    
+    # Retake photo
+    @app.route('/selfie_booth/retake_photo', methods=['POST'])
+    @rate_limit(max_requests=5, window_minutes=1)
     def retake_photo():
-        """Reset photo status for retake"""
         data = request.get_json()
         session_id = data.get('session_id')
         
         if not session_id:
             return jsonify({'success': False, 'error': 'No session ID'})
         
-        # Reset photo status for retake
         session_manager.reset_photo_for_retake(session_id)
         
-        print(f"🔄 Photo retake requested for session {session_id}")
+        print(f"🔄 Photo retake for session {session_id}")
         return jsonify({'success': True})
+    
+    # Session check
+    @app.route('/selfie_booth/session_check')
+    @rate_limit(max_requests=100, window_minutes=1)
+    def session_check():
+        tablet_id = request.args.get('tablet_id')
+        session_state = session_manager.get_session_state(tablet_id)
+        
+        return jsonify({
+            'session_state': session_state,
+            'timestamp': datetime.now().isoformat(),
+            'tablet_id': tablet_id
+        })
+    
+    # Short URLs
+    @app.route('/selfie_booth/1')
+    def booth_location_1():
+        return redirect('/selfie_booth/mobile?tablet_id=TABLET1&location=lobby')
 
-    @app.route('/verify')
-    def verify():
-        """Verification page for mobile users"""
-        if 'session_id' not in session:
-            return redirect('/mobile')
-        
-        # Check if session exists and is not verified
-        result = session_manager.get_session_by_id(session['session_id'])
-        
-        if not result:
-            return redirect('/mobile')
-        
-        if result[6]:  # Already verified
-            return redirect('/')
-        
-        return render_template_string(VERIFY_PAGE)
+    @app.route('/selfie_booth/2') 
+    def booth_location_2():
+        return redirect('/selfie_booth/mobile?tablet_id=TABLET2&location=entrance')
 
-    @app.route('/verify', methods=['POST'])
-    @rate_limit(max_requests=10, window_minutes=1)  # Prevent verification brute force
-    def verify_code():
-        """Verify the code entered by user"""
-        if 'session_id' not in session:
-            return jsonify({'success': False, 'error': 'Session expired'})
-        
-        data = request.get_json()
-        entered_code = data.get('code', '').strip()
-        
-        # Sanitize code input
-        if not entered_code.isdigit() or len(entered_code) != 6:
-            return jsonify({'success': False, 'error': 'Invalid code format'})
-        
-        # Verify code
-        success, first_name = session_manager.verify_session(session['session_id'], entered_code)
-        
-        if success:
-            print(f"✅ Verification successful for {first_name} - Session: {session['session_id']}")
-            return jsonify({'success': True, 'redirect': '/photo_session'})
-        else:
-            print(f"❌ Verification failed for session {session.get('session_id')} - Code: {entered_code}")
-            return jsonify({'success': False, 'error': 'Invalid code'})
+    @app.route('/selfie_booth/3')
+    def booth_location_3():
+        return redirect('/selfie_booth/mobile?tablet_id=TABLET3&location=event_hall')
 
-    @app.route('/upload_photo', methods=['POST'])
-    @rate_limit(max_requests=3, window_minutes=1)  # Prevent photo upload spam
-    def upload_photo():
-        """Upload and store photo from kiosk camera with enhanced validation"""
-        if 'photo' not in request.files:
-            return jsonify({'success': False, 'error': 'No photo uploaded'})
-        
-        photo = request.files['photo']
-        if photo.filename == '':
-            return jsonify({'success': False, 'error': 'No photo selected'})
-        
-        # Get session_id from form data (sent from kiosk) or session (from mobile)
-        session_id = request.form.get('session_id') or session.get('session_id')
-        
-        if not session_id:
-            return jsonify({'success': False, 'error': 'No session found'})
-        
-        # Get user info
-        result = session_manager.get_session_by_id(session_id)
-        
-        if not result or not result[6]:  # Not verified
-            return jsonify({'success': False, 'error': 'Not verified'})
-        
-        try:
-            # Read photo data
-            photo_data = photo.read()
-            
-            # Enhanced file validation
-            is_valid, error_msg = validate_image_file(photo_data)
-            if not is_valid:
-                return jsonify({'success': False, 'error': error_msg})
-            
-            # Convert to base64 for storage
-            photo_data_b64 = base64.b64encode(photo_data).decode('utf-8')
-            
-            # Store photo data in database and mark as ready
-            session_manager.update_photo_data(session_id, photo_data_b64)
-            
-            print(f"📸 Photo captured and ready for review - Session: {session_id}")
-            return jsonify({'success': True, 'message': 'Photo ready for review on mobile device'})
-                
-        except Exception as e:
-            app.logger.error(f"Photo upload error: {str(e)}")
-            return jsonify({'success': False, 'error': 'Upload processing failed'})
-
-    @app.route('/trigger_photo', methods=['POST'])
-    def trigger_photo():
-        """Manual photo trigger from kiosk (for testing or manual operation)"""
-        # Check if there's a verified user ready for photo
-        verified_result = session_manager.get_verified_session()
-        
-        if verified_result:
-            # Set the session and redirect to camera
-            session['session_id'] = verified_result[1]  # session_id
-            return jsonify({'success': True, 'redirect': '/camera'})
-        else:
-            return jsonify({'success': False, 'error': 'No verified user ready'})
-
-    @app.route('/admin/reset_sessions', methods=['POST'])
-    @rate_limit(max_requests=5, window_minutes=1)  # Prevent admin spam
-    def reset_sessions():
-        """Reset all sessions (for debugging)"""
-        try:
-            deleted_count = session_manager.reset_all_sessions()
-            
-            print(f"🔄 Reset {deleted_count} sessions")
-            return jsonify({'success': True, 'message': f'Reset {deleted_count} sessions'})
-        except Exception as e:
-            return jsonify({'success': False, 'error': str(e)})
-
-    @app.route('/admin/config')
-    def admin_config():
-        """Admin configuration page"""
-        # Get session statistics
+    @app.route('/selfie_booth/4')
+    def booth_location_4():
+        return redirect('/selfie_booth/mobile?tablet_id=TABLET4&location=party_room')
+    
+    # Admin
+    @app.route('/selfie_booth/admin')
+    def admin():
         total_count, verified_count, unverified_count = session_manager.get_session_stats()
-        
-        # Get recent sessions for debugging
-        recent_sessions = session_manager.get_recent_sessions()
+        recent_sessions = session_manager.get_recent_sessions(10)
         
         sessions_html = ""
-        if recent_sessions:
-            sessions_html = "<h3>Recent Sessions (Last 10):</h3><table border='1' style='border-collapse: collapse; width: 100%;'>"
-            sessions_html += "<tr><th>Name</th><th>Phone</th><th>Verified</th><th>Code</th><th>Photo</th><th>Created</th><th>Age</th></tr>"
+        for session_data in recent_sessions:
+            status = '✅' if session_data[3] else '⏳'
+            sessions_html += f"<tr><td>{session_data[1]}</td><td>{session_data[2]}</td><td>{status}</td><td>{session_data[4]}</td><td>{session_data[5]}</td></tr>"
+        
+        return f"""
+        <html>
+        <head><title>Selfie Booth Admin</title></head>
+        <body style="font-family: Arial; padding: 20px;">
+            <h1>📸 Selfie Booth Admin Dashboard</h1>
+            <p><strong>Sessions:</strong> {total_count} total, {verified_count} verified, {unverified_count} pending</p>
             
-            for session_data in recent_sessions:
-                session_id, name, phone, verified, code, photo_ready, created_at = session_data
-                try:
-                    if 'T' in created_at:
-                        created_time = datetime.fromisoformat(created_at)
-                    else:
-                        created_time = datetime.fromisoformat(created_at.replace(' ', 'T'))
-                    age = datetime.now() - created_time
-                    age_str = f"{age.total_seconds():.0f}s ago"
-                except:
-                    age_str = "Unknown"
-                
-                verified_str = "✅ Yes" if verified else "❌ No"
-                photo_str = "📸 Ready" if photo_ready else "⏳ Waiting"
-                sessions_html += f"<tr><td>{escape(name)}</td><td>{escape(phone)}</td><td>{verified_str}</td><td>{code}</td><td>{photo_str}</td><td>{created_at}</td><td>{age_str}</td></tr>"
+            <table border="1" style="border-collapse: collapse; width: 100%;">
+                <tr><th>Name</th><th>Phone</th><th>Status</th><th>Code</th><th>Created</th></tr>
+                {sessions_html}
+            </table>
             
-            sessions_html += "</table>"
-        else:
-            sessions_html = "<p><em>No sessions found</em></p>"
-        
-        return f'''
-        <h2>Selfie Booth Configuration</h2>
-        <p><strong>Current messaging service:</strong> {escape(os.getenv('MESSAGING_SERVICE', 'local'))}</p>
-        <p><strong>Active sessions:</strong> {total_count} total ({verified_count} verified, {unverified_count} unverified)</p>
-        <p><strong>Current time:</strong> {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
-        
-        <div style="margin: 20px 0;">
-            <button onclick="resetSessions()" style="background: #e74c3c; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin-right: 10px;">
-                🔄 Reset All Sessions
-            </button>
-            <button onclick="location.reload()" style="background: #3498db; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer;">
-                🔄 Refresh Page
-            </button>
-        </div>
-        
-        {sessions_html}
-        
-        <h3>URL Structure:</h3>
-        <ul>
-            <li><strong>Kiosk Display:</strong> <a href="/">http://localhost:5001/</a> (shows QR code)</li>
-            <li><strong>Mobile Registration:</strong> <a href="/mobile">http://localhost:5001/mobile</a> (for phones)</li>
-            <li><strong>Admin Config:</strong> <a href="/admin/config">http://localhost:5001/admin/config</a></li>
-        </ul>
-        
-        <h3>To switch messaging services, set environment variables:</h3>
-        <ul>
-            <li><strong>Local Storage:</strong> MESSAGING_SERVICE=local (default)</li>
-            <li><strong>Twilio:</strong> MESSAGING_SERVICE=twilio, TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER</li>
-            <li><strong>Email:</strong> MESSAGING_SERVICE=email, EMAIL_ADDRESS, EMAIL_PASSWORD</li>
-        </ul>
-        
-        <h3>QR Code Setup:</h3>
-        <p>Generate a QR code pointing to: <strong>http://your-domain.com/mobile</strong></p>
-        
-        <h3>Debugging Steps:</h3>
-        <ol>
-            <li><strong>Test Mobile Registration:</strong> <a href="/mobile" target="_blank">Open mobile page</a></li>
-            <li><strong>Check Kiosk Display:</strong> <a href="/" target="_blank">Open kiosk page</a></li>
-            <li><strong>Monitor Server Console:</strong> Watch the terminal for debug messages</li>
-            <li><strong>Reset if Stuck:</strong> Use the reset button above</li>
-        </ol>
-        
-        <script>
-            async function resetSessions() {{
-                if (confirm('Are you sure you want to reset all sessions?')) {{
-                    try {{
-                        const response = await fetch('/admin/reset_sessions', {{ method: 'POST' }});
-                        const result = await response.json();
-                        
-                        if (result.success) {{
-                            alert('Sessions reset successfully!');
-                            location.reload();
-                        }} else {{
-                            alert('Error: ' + result.error);
-                        }}
-                    }} catch (error) {{
-                        alert('Error resetting sessions');
-                    }}
-                }}
-            }}
+            <h3>Quick Links:</h3>
+            <ul>
+                <li><a href="/selfie_booth/">← Back to Kiosk</a></li>
+                <li><a href="/selfie_booth/mobile">Mobile Registration Page</a></li>
+                <li><a href="/selfie_booth/health">Health Check</a></li>
+            </ul>
+        </body>
+        </html>
+        """
+    
+    # Health check
+    @app.route('/selfie_booth/health')
+    def health():
+        try:
+            if hasattr(session_manager, 'get_connection'):
+                db_conn = session_manager.get_connection()
+                db_status = "connected" if db_conn else "disconnected"
+                if db_conn:
+                    db_conn.close()
+            else:
+                db_status = "sqlite"
             
-            // Auto-refresh every 5 seconds
-            setTimeout(() => {{
-                location.reload();
-            }}, 5000);
-        </script>
-        '''
+            return jsonify({
+                'status': 'healthy',
+                'timestamp': datetime.now().isoformat(),
+                'database': db_status,
+                'config': {
+                    'messaging_service': 'local'
+                }
+            })
+        except Exception as e:
+            return jsonify({
+                'status': 'error',
+                'error': str(e),
+                'timestamp': datetime.now().isoformat()
+            }), 500
+    
+    # Test endpoint
+    @app.route('/selfie_booth/test')
+    def test_route():
+        return jsonify({
+            'status': 'success',
+            'message': 'Routes are working!',
+            'timestamp': datetime.now().isoformat(),
+            'session_manager': str(type(session_manager)),
+            'messaging_factory': str(type(messaging_factory)),
+            'session_data': dict(session) if session else 'No session'
+        })
+    
+    route_count = len([rule for rule in app.url_map.iter_rules() if rule.endpoint != 'static'])
+    print(f"✅ Successfully registered {route_count} routes")
+    
+    return app
