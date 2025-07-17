@@ -609,9 +609,12 @@
         }
         
         async checkSessionState() {
+            console.log(`🔍 Checking session state for tablet: ${this.tabletId}`);
+            
             // Check localStorage for retake signal first
             const retakeKey = `retake_${this.tabletId}`;
             const retakeSignal = localStorage.getItem(retakeKey);
+            console.log(`📸 Retake signal check: ${retakeKey} = ${retakeSignal ? 'FOUND' : 'NOT FOUND'}`);
             
             if (retakeSignal) {
                 try {
@@ -638,6 +641,7 @@
             // Check localStorage for verification complete signal
             const verificationKey = `verification_${this.tabletId}`;
             const verificationComplete = localStorage.getItem(verificationKey);
+            console.log(`📱 Verification signal check: ${verificationKey} = ${verificationComplete ? 'FOUND' : 'NOT FOUND'}`);
             
             if (verificationComplete) {
                 try {
@@ -664,6 +668,7 @@
             // Check localStorage for new session data first
             const sessionKey = `session_${this.tabletId}`;
             const storedSession = localStorage.getItem(sessionKey);
+            console.log(`📋 Session signal check: ${sessionKey} = ${storedSession ? 'FOUND' : 'NOT FOUND'}`);
             
             if (storedSession) {
                 try {

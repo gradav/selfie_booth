@@ -246,6 +246,7 @@
             };
             
             localStorage.setItem(`retake_${tabletId}`, JSON.stringify(retakeSignal));
+            console.log(`📱 MOBILE: Stored retake signal: retake_${tabletId}`, retakeSignal);
             
             // Go back to waiting
             document.getElementById('review-section').classList.remove('active');

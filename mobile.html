@@ -278,6 +278,7 @@
                 };
                 
                 localStorage.setItem(`session_${tabletId}`, JSON.stringify(sessionData));
+                console.log(`📱 MOBILE: Stored session data: session_${tabletId}`, sessionData);
                 
                 // Show success
                 showSuccess('Registration successful! Look at the kiosk screen for your verification code.');
