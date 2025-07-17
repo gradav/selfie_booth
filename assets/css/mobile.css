@@ -34,10 +34,10 @@ body {
 
 h1 {
     text-align: center;
-    color: #333;
+    color: #ffffff !important; /* Force white text on gradient background */
     margin-bottom: 30px;
     font-size: 28px;
-    text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
 }
 
 /* Form Styles */
@@ -53,6 +53,7 @@ label {
     font-size: 14px;
 }
 
+/* Simplified Input Styling - No validation colors */
 input[type="text"],
 input[type="tel"],
 input[type="email"] {
@@ -63,23 +64,42 @@ input[type="email"] {
     font-size: 16px;
     box-sizing: border-box;
     transition: all 0.3s ease;
-    background: #fff;
+    background: #ffffff !important; /* Force white background */
+    color: #333333 !important; /* Force dark text */
+    font-family: 'Arial', sans-serif;
+    -webkit-text-fill-color: #333333 !important; /* Fix for webkit autofill */
 }
 
-input:focus {
-    border-color: #667eea;
+input[type="text"]:focus,
+input[type="tel"]:focus,
+input[type="email"]:focus {
+    border-color: #667eea !important;
     outline: none;
     box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
     transform: translateY(-1px);
+    background: #ffffff !important; /* Ensure white background on focus */
+    color: #333333 !important; /* Ensure dark text on focus */
 }
 
-input:invalid {
-    border-color: #e74c3c;
+/* Fix for browser autofill */
+input[type="text"]:-webkit-autofill,
+input[type="tel"]:-webkit-autofill,
+input[type="email"]:-webkit-autofill {
+    -webkit-box-shadow: 0 0 0 30px white inset !important;
+    -webkit-text-fill-color: #333333 !important;
+    background: #ffffff !important;
+    color: #333333 !important;
 }
 
-input:valid {
-    border-color: #27ae60;
+input[type="text"]:-webkit-autofill:focus,
+input[type="tel"]:-webkit-autofill:focus,
+input[type="email"]:-webkit-autofill:focus {
+    -webkit-box-shadow: 0 0 0 30px white inset !important;
+    -webkit-text-fill-color: #333333 !important;
 }
+
+/* Remove validation states - inputs stay consistent */
+/* Removed .form-group.error and .form-group.success styles */
 
 /* Checkbox Group */
 .checkbox-group {
@@ -156,7 +176,7 @@ input:valid {
     display: none;
 }
 
-/* Messages */
+/* Messages - Hide when empty */
 .error {
     color: #e74c3c;
     margin-top: 10px;
@@ -167,6 +187,11 @@ input:valid {
     border: 1px solid #e74c3c;
     border-radius: 4px;
     animation: shake 0.5s ease-in-out;
+    display: none; /* Hide by default */
+}
+
+.error:not(:empty) {
+    display: block; /* Only show when there's content */
 }
 
 .success {
@@ -179,6 +204,11 @@ input:valid {
     border: 1px solid #27ae60;
     border-radius: 4px;
     animation: fadeIn 0.5s ease-in;
+    display: none; /* Hide by default */
+}
+
+.success:not(:empty) {
+    display: block; /* Only show when there's content */
 }
 
 @keyframes shake {
@@ -232,36 +262,11 @@ input:valid {
     font-weight: bold;
 }
 
-/* Input Validation Feedback */
-.form-group.error input {
-    border-color: #e74c3c;
-    background: #ffeaea;
-}
-
-.form-group.success input {
-    border-color: #27ae60;
-    background: #eafaf1;
-}
-
-.validation-message {
-    font-size: 12px;
-    margin-top: 5px;
-    display: none;
-}
-
-.validation-message.error {
-    color: #e74c3c;
-    display: block;
-}
-
-.validation-message.success {
-    color: #27ae60;
-    display: block;
-}
+/* Validation feedback removed */
 
 /* Phone Input Styling */
 input[type="tel"] {
-    font-family: monospace;
+    font-family: 'Arial', sans-serif;
     letter-spacing: 1px;
 }
 
@@ -294,6 +299,8 @@ button:focus,
     input[type="email"] {
         font-size: 16px; /* Prevent zoom on iOS */
         padding: 14px;
+        background: #ffffff !important;
+        color: #333333 !important;
     }
     
     .submit-btn {
@@ -321,24 +328,26 @@ button:focus,
     }
 }
 
-/* Dark mode support */
+/* Dark mode support - but force light inputs */
 @media (prefers-color-scheme: dark) {
     .container {
         background: #2c2c2c;
         color: white;
     }
     
+    /* Force inputs to stay light colored for visibility */
     input[type="text"],
     input[type="tel"],
     input[type="email"] {
-        background: #3c3c3c;
+        background: #ffffff !important;
         border-color: #555;
-        color: white;
+        color: #333333 !important;
     }
     
     input:focus {
         border-color: #667eea;
-        background: #4c4c4c;
+        background: #ffffff !important;
+        color: #333333 !important;
     }
     
     label {

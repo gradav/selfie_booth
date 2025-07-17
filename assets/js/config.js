@@ -11,27 +11,27 @@ const isDevelopment = window.location.hostname === 'localhost' ||
 // Base configuration
 const APP_CONFIG = {
     // API Configuration
-    API_BASE: '/api',
+    API_BASE: '/selfie_booth/api',
     
     // Endpoints
     ENDPOINTS: {
-        REGISTER: '/api/register',
-        VERIFY: '/api/verify',
-        UPLOAD_PHOTO: '/api/upload_photo',
-        CHECK_PHOTO: '/api/check_photo',
-        KEEP_PHOTO: '/api/keep_photo',
-        RETAKE_PHOTO: '/api/retake_photo',
-        SESSION_CHECK: '/api/session_check',
-        ADMIN_STATS: '/api/admin/stats',
-        ADMIN_SESSIONS: '/api/admin/sessions',
-        ADMIN_RESET: '/api/admin/reset',
-        HEALTH: '/api/health'
+        REGISTER: '/selfie_booth/api/register',
+        VERIFY: '/selfie_booth/api/verify',
+        UPLOAD_PHOTO: '/selfie_booth/api/upload_photo',
+        CHECK_PHOTO: '/selfie_booth/api/check_photo',
+        KEEP_PHOTO: '/selfie_booth/api/keep_photo',
+        RETAKE_PHOTO: '/selfie_booth/api/retake_photo',
+        SESSION_CHECK: '/selfie_booth/api/session_check',
+        ADMIN_STATS: '/selfie_booth/api/admin/stats',
+        ADMIN_SESSIONS: '/selfie_booth/api/admin/sessions',
+        ADMIN_RESET: '/selfie_booth/api/admin/reset',
+        HEALTH: '/selfie_booth/api/health'
     },
     
     // Real-time Configuration
     REALTIME: {
         // Use Server-Sent Events for real-time updates
-        SSE_ENDPOINT: '/api/stream',
+        SSE_ENDPOINT: '/selfie_booth/api/stream',
         // Polling fallback interval (milliseconds)
         POLL_INTERVAL: 3000,
         // Connection retry settings
