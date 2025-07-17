@@ -490,14 +490,61 @@
             const ctx = canvas.getContext('2d');
             ctx.drawImage(video, 0, 0);
             
-            // Convert to blob
-            canvas.toBlob((blob) => {
-                cameraStatus.textContent = 'Photo taken! Processing...';
-                
-                // Convert blob to base64 for localStorage
-                const reader = new FileReader();
-                reader.onload = () => {
-                    const base64Photo = reader.result;
+            // Convert to blob with error handling
+            try {
+                canvas.toBlob((blob) => {
+                    if (!blob) {
+                        console.error('Failed to create blob from canvas');
+                        cameraStatus.textContent = 'Photo capture failed. Please try again.';
+                        setTimeout(() => {
+                            this.showScreen('welcome-screen');
+                        }, 3000);
+                        return;
+                    }
+                    
+                    cameraStatus.textContent = 'Photo taken! Processing...';
+                    
+                    // Convert blob to base64 for localStorage
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                        const base64Photo = reader.result;
+                        
+                        // Store photo for mobile review
+                        const photoData = {
+                            tablet_id: this.tabletId,
+                            photo: base64Photo,
+                            timestamp: Date.now()
+                        };
+                        
+                        localStorage.setItem(`photo_${this.tabletId}`, JSON.stringify(photoData));
+                        
+                        // Stop camera stream
+                        const stream = video.srcObject;
+                        if (stream) {
+                            const tracks = stream.getTracks();
+                            tracks.forEach(track => track.stop());
+                        }
+                        
+                        // Show the captured photo on kiosk
+                        this.showCapturedPhoto(base64Photo);
+                    };
+                    
+                    reader.onerror = () => {
+                        console.error('Failed to read blob as data URL');
+                        cameraStatus.textContent = 'Photo processing failed. Please try again.';
+                        setTimeout(() => {
+                            this.showScreen('welcome-screen');
+                        }, 3000);
+                    };
+                    
+                    reader.readAsDataURL(blob);
+                    
+                }, 'image/jpeg', 0.8);
+            } catch (error) {
+                console.error('Canvas toBlob error:', error);
+                // Fallback to dataURL method
+                try {
+                    const base64Photo = canvas.toDataURL('image/jpeg', 0.8);
                     
                     // Store photo for mobile review
                     const photoData = {
@@ -517,11 +564,15 @@
                     
                     // Show the captured photo on kiosk
                     this.showCapturedPhoto(base64Photo);
-                };
-                
-                reader.readAsDataURL(blob);
-                
-            }, 'image/jpeg', 0.8);
+                    cameraStatus.textContent = 'Photo taken! Check your phone to keep or retake.';
+                } catch (fallbackError) {
+                    console.error('Fallback photo capture failed:', fallbackError);
+                    cameraStatus.textContent = 'Photo capture failed. Please try again.';
+                    setTimeout(() => {
+                        this.showScreen('welcome-screen');
+                    }, 3000);
+                }
+            }
         }
         
         showCapturedPhoto(base64Photo) {
@@ -542,6 +593,9 @@
                 // Hide photo, show video again for next user
                 photoDisplay.style.display = 'none';
                 video.style.display = 'block';
+                
+                // Clear session on server to prevent cycling
+                this.clearServerSession();
                 
                 this.showScreen('welcome-screen');
             }, 5000);
@@ -581,6 +635,24 @@
             };
             
             updateCountdown();
+        }
+        
+        // ============ Session Management ============
+        
+        async clearServerSession() {
+            try {
+                await fetch('/selfie_booth/api/session_complete', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        tablet_id: this.tabletId
+                    })
+                });
+            } catch (error) {
+                console.log('Failed to clear server session:', error);
+            }
         }
         
         // ============ Improved Session Monitoring ============
