@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Selfie Booth - Kiosk</title>
     <link rel="stylesheet" href="assets/css/kiosk.css">
+    
+    <!-- Load QRious library first -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
 </head>
 <body>
     <div class="tablet-info">
@@ -22,7 +25,7 @@
             <div class="qr-info">
                 <div class="qr-label">📱 Scan QR Code:</div>
                 <div class="qr-container">
-                    <div id="qrcode"></div>
+                    <div id="qrcode">Loading QR code...</div>
                 </div>
                 <div class="url-label">Or visit directly:</div>
                 <div id="mobile-url" class="url">Loading...</div>
@@ -64,26 +67,381 @@
     <!-- Camera/Photo Session Screen -->
     <div id="camera-screen" class="screen">
         <div class="greeting">
-            <h1 id="camera-greeting">Hi [Name], smile for the camera! 📸</h1>
-        </div>
-        
-        <div class="camera-container">
-            <video id="video" autoplay playsinline muted></video>
-            <canvas id="canvas" style="display: none;"></canvas>
-            <img id="photo-display" alt="Your photo" style="display: none;">
-            <div id="camera-countdown" class="countdown"></div>
-            <div class="controls">
-                <button id="photo-btn" class="photo-btn">Take Photo</button>
-            </div>
-            <div id="camera-status" class="status"></div>
+            <h1 id="camera-greeting">Hi [Name], smile for the camera!</h1>
         </div>
     </div>
 
-    <!-- Scripts -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrious/4.0.2/qrious.min.js"></script>
-    <script src="assets/js/config.js"></script>
-    <script src="assets/js/api.js"></script>
-    <script src="assets/js/realtime.js"></script>
-    <script src="assets/js/kiosk.js"></script>
+    <!-- Enhanced Kiosk JavaScript -->
+    <script>
+    class SimpleKioskManager {
+        constructor() {
+            this.tabletId = 'TABLET1';
+            this.location = 'lobby';
+            this.mobileUrl = `${window.location.origin}/selfie_booth/mobile.html?tablet_id=${this.tabletId}&location=${this.location}`;
+            this.currentScreen = 'welcome';
+            this.sessionMonitoringInterval = null;
+            
+            this.init();
+        }
+        
+        init() {
+            console.log('🖥️ Initializing kiosk display');
+            
+            // Update tablet info
+            this.updateTabletInfo();
+            
+            // Generate QR code (wait for DOM to be ready)
+            setTimeout(() => this.generateQRCode(), 100);
+            
+            // Start session monitoring
+            this.startSessionMonitoring();
+            
+            console.log('✅ Kiosk display initialized');
+        }
+        
+        updateTabletInfo() {
+            const tabletElement = document.getElementById('tablet-id');
+            const locationElement = document.getElementById('location');
+            const statusElement = document.getElementById('status');
+            
+            if (tabletElement) tabletElement.textContent = `Tablet: ${this.tabletId}`;
+            if (locationElement) locationElement.textContent = `Location: ${this.location}`;
+            if (statusElement) {
+                statusElement.textContent = 'Ready';
+                statusElement.style.color = '#4CAF50';
+            }
+        }
+        
+        // ============ QR Code Generation with Caching ============
+        
+        generateQRCode() {
+            const qrElement = document.getElementById('qrcode');
+            const urlElement = document.getElementById('mobile-url');
+            
+            if (urlElement) {
+                urlElement.textContent = this.mobileUrl;
+            }
+            
+            if (qrElement) {
+                qrElement.innerHTML = 'Loading QR code...';
+                
+                // Try to use cached QR code first
+                if (!this.loadCachedQRCode(qrElement)) {
+                    this.generateFreshQRCode(qrElement);
+                }
+            }
+        }
+        
+        loadCachedQRCode(qrElement) {
+            // Check localStorage for cached QR code
+            const cacheKey = `qr_cache_${this.tabletId}_${btoa(this.mobileUrl).slice(0, 10)}`;
+            const cached = localStorage.getItem(cacheKey);
+            
+            if (cached) {
+                try {
+                    const qrData = JSON.parse(cached);
+                    
+                    // Check if cache is still valid (24 hours)
+                    if (Date.now() - qrData.timestamp < 24 * 60 * 60 * 1000) {
+                        qrElement.innerHTML = `
+                            <img src="${qrData.dataUrl}" 
+                                 alt="QR Code (cached)" 
+                                 style="border: 10px solid white; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); transition: transform 0.3s ease;"
+                                 onmouseenter="this.style.transform='scale(1.05)'"
+                                 onmouseleave="this.style.transform='scale(1)'">
+                        `;
+                        console.log('✅ QR code loaded from cache');
+                        return true;
+                    } else {
+                        // Cache expired, remove it
+                        localStorage.removeItem(cacheKey);
+                    }
+                } catch (error) {
+                    console.log('⚠️ Invalid QR cache data, regenerating');
+                    localStorage.removeItem(cacheKey);
+                }
+            }
+            
+            return false;
+        }
+        
+        generateFreshQRCode(qrElement) {
+            // Try server-side QR generation first, fallback to client-side
+            this.tryServerQRCode(qrElement).then(success => {
+                if (!success) {
+                    this.generateClientQRCode(qrElement);
+                }
+            });
+        }
+        
+        async tryServerQRCode(qrElement) {
+            try {
+                // Try to get QR code from your API
+                const response = await fetch(`/api/qr_code?url=${encodeURIComponent(this.mobileUrl)}&size=200`);
+                
+                if (response.ok) {
+                    const blob = await response.blob();
+                    const imageUrl = URL.createObjectURL(blob);
+                    
+                    qrElement.innerHTML = `
+                        <img src="${imageUrl}" 
+                             alt="QR Code (server)" 
+                             style="border: 10px solid white; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); transition: transform 0.3s ease;"
+                             onmouseenter="this.style.transform='scale(1.05)'"
+                             onmouseleave="this.style.transform='scale(1)'"
+                             onload="console.log('✅ Server QR code loaded')">
+                    `;
+                    
+                    // Cache the server-generated QR code
+                    this.cacheServerQRCode(imageUrl);
+                    
+                    console.log('✅ QR code generated server-side');
+                    return true;
+                }
+            } catch (error) {
+                console.log('⚠️ Server QR generation failed, using client-side');
+            }
+            
+            return false;
+        }
+        
+        generateClientQRCode(qrElement) {
+            this.waitForQRious(() => {
+                try {
+                    const canvas = document.createElement('canvas');
+                    
+                    const qr = new QRious({
+                        element: canvas,
+                        value: this.mobileUrl,
+                        size: 200,
+                        level: 'M',
+                        foreground: '#333333',
+                        background: '#ffffff'
+                    });
+                    
+                    // Cache the generated QR code
+                    this.cacheQRCode(canvas);
+                    
+                    // Style and add to DOM
+                    canvas.style.border = '10px solid white';
+                    canvas.style.borderRadius = '10px';
+                    canvas.style.boxShadow = '0 4px 8px rgba(0,0,0,0.1)';
+                    canvas.style.transition = 'transform 0.3s ease';
+                    canvas.addEventListener('mouseenter', () => {
+                        canvas.style.transform = 'scale(1.05)';
+                    });
+                    canvas.addEventListener('mouseleave', () => {
+                        canvas.style.transform = 'scale(1)';
+                    });
+                    
+                    qrElement.innerHTML = '';
+                    qrElement.appendChild(canvas);
+                    
+                    console.log('✅ QR code generated with QRious (client-side)');
+                    
+                } catch (error) {
+                    console.error('❌ QRious generation error:', error);
+                    this.showQRFallback(qrElement);
+                }
+            });
+        }
+        
+        cacheQRCode(canvas) {
+            try {
+                const dataUrl = canvas.toDataURL('image/png');
+                const cacheKey = `qr_cache_${this.tabletId}_${btoa(this.mobileUrl).slice(0, 10)}`;
+                const cacheData = {
+                    dataUrl: dataUrl,
+                    timestamp: Date.now(),
+                    url: this.mobileUrl
+                };
+                
+                localStorage.setItem(cacheKey, JSON.stringify(cacheData));
+                console.log('💾 QR code cached for future use');
+            } catch (error) {
+                console.log('⚠️ Failed to cache QR code:', error);
+            }
+        }
+        
+        async cacheServerQRCode(blobUrl) {
+            try {
+                // Convert blob URL to data URL for caching
+                const response = await fetch(blobUrl);
+                const blob = await response.blob();
+                
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const cacheKey = `qr_cache_${this.tabletId}_${btoa(this.mobileUrl).slice(0, 10)}`;
+                    const cacheData = {
+                        dataUrl: reader.result,
+                        timestamp: Date.now(),
+                        url: this.mobileUrl
+                    };
+                    
+                    localStorage.setItem(cacheKey, JSON.stringify(cacheData));
+                    console.log('💾 Server QR code cached for future use');
+                };
+                reader.readAsDataURL(blob);
+            } catch (error) {
+                console.log('⚠️ Failed to cache server QR code:', error);
+            }
+        }
+        
+        waitForQRious(callback, attempts = 0) {
+            if (window.QRious) {
+                callback();
+            } else if (attempts < 50) {
+                setTimeout(() => {
+                    this.waitForQRious(callback, attempts + 1);
+                }, 100);
+            } else {
+                console.warn('⚠️ QRious library failed to load, showing fallback');
+                this.showQRFallback(document.getElementById('qrcode'));
+            }
+        }
+        
+        showQRFallback(qrElement) {
+            qrElement.innerHTML = `
+                <div style="padding: 30px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 15px; text-align: center; border: 3px solid #fff;">
+                    <div style="font-size: 18px; margin-bottom: 15px;">📱 <strong>Visit on your phone:</strong></div>
+                    <div style="font-size: 16px; font-family: monospace; background: rgba(255,255,255,0.2); padding: 15px; border-radius: 8px; word-break: break-all; margin: 10px 0;">
+                        ${this.mobileUrl}
+                    </div>
+                    <div style="font-size: 14px; opacity: 0.9; margin-top: 15px;">
+                        Type this URL in your phone's browser
+                    </div>
+                </div>
+            `;
+        }
+        
+        // ============ Screen Management ============
+        
+        showScreen(screenName) {
+            const screens = ['welcome-screen', 'verification-screen', 'camera-screen'];
+            screens.forEach(screenId => {
+                const screen = document.getElementById(screenId);
+                if (screen) screen.classList.remove('active');
+            });
+            
+            const targetScreen = document.getElementById(screenName);
+            if (targetScreen) {
+                targetScreen.classList.add('active');
+                this.currentScreen = screenName.replace('-screen', '');
+                console.log(`🖥️ Switched to ${screenName}`);
+            }
+        }
+        
+        showVerificationCode(code, userName = 'User') {
+            const codeElement = document.getElementById('verification-code');
+            const greetingElement = document.getElementById('user-greeting');
+            
+            if (codeElement) codeElement.textContent = code;
+            if (greetingElement) greetingElement.textContent = `Hi ${userName}!`;
+            
+            this.showScreen('verification-screen');
+            this.startCountdown(120);
+        }
+        
+        startCountdown(seconds) {
+            const countdownElement = document.getElementById('countdown');
+            if (!countdownElement) return;
+            
+            const updateCountdown = () => {
+                const minutes = Math.floor(seconds / 60);
+                const remainingSeconds = seconds % 60;
+                countdownElement.textContent = `Expires in ${minutes}:${remainingSeconds.toString().padStart(2, '0')}`;
+                
+                if (seconds <= 0) {
+                    countdownElement.textContent = 'Code expired';
+                    this.showScreen('welcome-screen');
+                    return;
+                }
+                
+                seconds--;
+                setTimeout(updateCountdown, 1000);
+            };
+            
+            updateCountdown();
+        }
+        
+        // ============ Improved Session Monitoring ============
+        
+        startSessionMonitoring() {
+            // Check if session_check endpoint exists first
+            this.checkEndpointAvailability().then(available => {
+                if (available) {
+                    console.log('✅ Session monitoring enabled');
+                    this.sessionMonitoringInterval = setInterval(() => {
+                        this.checkSessionState();
+                    }, 3000);
+                } else {
+                    console.log('⚠️ Session monitoring disabled - endpoint not available');
+                    // Try again in 30 seconds in case API comes online
+                    setTimeout(() => this.startSessionMonitoring(), 30000);
+                }
+            });
+        }
+        
+        async checkEndpointAvailability() {
+            try {
+                const response = await fetch('/api/session_check?tablet_id=' + this.tabletId);
+                return response.status !== 404;
+            } catch (error) {
+                return false;
+            }
+        }
+        
+        async checkSessionState() {
+            try {
+                const response = await fetch('/api/session_check?tablet_id=' + this.tabletId);
+                
+                if (response.status === 404) {
+                    // Endpoint went away, stop monitoring
+                    console.log('⚠️ Session endpoint unavailable, stopping monitoring');
+                    if (this.sessionMonitoringInterval) {
+                        clearInterval(this.sessionMonitoringInterval);
+                        this.sessionMonitoringInterval = null;
+                    }
+                    return;
+                }
+                
+                const data = await response.json();
+                
+                if (data.success && data.data.session_state !== 'default') {
+                    console.log('📱 Session state changed:', data.data.session_state);
+                    this.handleSessionState(data.data);
+                }
+            } catch (error) {
+                // Network error - don't spam console, just fail silently
+                console.log('📡 Session check failed (network error)');
+            }
+        }
+        
+        handleSessionState(sessionData) {
+            switch (sessionData.session_state) {
+                case 'verification_needed':
+                    this.showVerificationCode(sessionData.verification_code, sessionData.user_name);
+                    break;
+                case 'photo_session':
+                    this.showScreen('camera-screen');
+                    break;
+                default:
+                    this.showScreen('welcome-screen');
+            }
+        }
+    }
+    
+    // Initialize when DOM is ready
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('🖥️ DOM loaded, initializing kiosk...');
+        window.kioskManager = new SimpleKioskManager();
+    });
+    
+    // Test functions for debugging
+    window.testVerificationScreen = () => window.kioskManager.showVerificationCode('123456', 'Test User');
+    window.testCameraScreen = () => window.kioskManager.showScreen('camera-screen');
+    window.testWelcomeScreen = () => window.kioskManager.showScreen('welcome-screen');
+    
+    </script>
 </body>
 </html>

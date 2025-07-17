@@ -1,0 +1,44 @@
+#!/home/n99fc05/virtualenv/lockhartlovesyou.com/selfie_booth/api/3.9/bin/python
+"""
+WSGI entry point for InMotion Hosting with Passenger
+Final working version
+"""
+
+import sys
+import os
+
+# Add current directory to Python path
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, current_dir)
+
+try:
+    # Import the Flask application from app.py
+    from app import app as application
+    
+    # Configure for production
+    if hasattr(application, 'config'):
+        application.config['DEBUG'] = False
+        application.config['ENV'] = 'production'
+        
+except Exception as e:
+    # If there's any error, create a fallback WSGI application that shows the error
+    def application(environ, start_response):
+        status = '500 Internal Server Error'
+        headers = [
+            ('Content-Type', 'application/json'),
+            ('Access-Control-Allow-Origin', '*')
+        ]
+        start_response(status, headers)
+        
+        import json
+        error_response = json.dumps({
+            'success': False,
+            'error': f'WSGI Error: {str(e)}',
+            'debug': {
+                'python_executable': sys.executable,
+                'current_dir': current_dir,
+                'message': 'Check passenger logs for details'
+            }
+        }, indent=2)
+        
+        return [error_response.encode('utf-8')]
