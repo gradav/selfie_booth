@@ -373,27 +373,71 @@ def retake_photo():
 
 @app.route('/admin/stats')
 def admin_stats():
-    """Admin statistics endpoint (placeholder)"""
-    return jsonify({
-        'success': True,
-        'data': {
-            'total_sessions': 0,
-            'active_sessions': 0,
-            'photos_taken': 0,
-            'photos_sent': 0
-        }
-    }), 200
+    """Admin statistics endpoint"""
+    try:
+        total_sessions = len(active_sessions)
+        verified_sessions = sum(1 for session in active_sessions.values() 
+                               if session.get('state') == 'photo_session' or session.get('verified_at'))
+        pending_sessions = sum(1 for session in active_sessions.values() 
+                              if session.get('state') == 'verification_needed')
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'total_sessions': total_sessions,
+                'verified_sessions': verified_sessions,
+                'pending_sessions': pending_sessions,
+                'photos_taken': verified_sessions  # Approximate - verified sessions likely took photos
+            }
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Stats failed: {str(e)}'
+        }), 500
 
 @app.route('/admin/sessions')
 def admin_sessions():
-    """Admin sessions list endpoint (placeholder)"""
-    return jsonify({
-        'success': True,
-        'data': {
-            'sessions': [],
-            'total': 0
-        }
-    }), 200
+    """Admin sessions list endpoint"""
+    try:
+        sessions_list = []
+        
+        for tablet_id, session_data in active_sessions.items():
+            # Format session data for admin display - match expected field names
+            is_verified = (session_data.get('state') == 'photo_session' or 
+                          session_data.get('verified_at') is not None)
+            
+            session_info = {
+                'session_id': session_data.get('session_id', tablet_id),  # Use session_id or fallback to tablet_id
+                'tablet_id': tablet_id,
+                'first_name': session_data.get('user_name', 'Unknown'),  # Admin expects first_name not user_name
+                'phone': session_data.get('phone', 'N/A'),
+                'email': session_data.get('email', ''),
+                'verified': is_verified,  # Admin expects boolean verified not state
+                'state': session_data.get('state', 'unknown'),
+                'verification_code': session_data.get('verification_code', ''),
+                'created_at': session_data.get('timestamp', ''),
+                'verified_at': session_data.get('verified_at', '')
+            }
+            sessions_list.append(session_info)
+        
+        # Sort by creation time (most recent first)
+        sessions_list.sort(key=lambda x: x.get('created_at', ''), reverse=True)
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'sessions': sessions_list,
+                'total': len(sessions_list)
+            }
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Sessions list failed: {str(e)}'
+        }), 500
 
 @app.route('/admin/reset', methods=['POST'])
 def admin_reset():
