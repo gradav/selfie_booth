@@ -122,6 +122,10 @@ def register():
             'timestamp': datetime.now().isoformat()
         }
         
+        # Debug log
+        print(f"📝 DEBUG: Stored session for {tablet_id}: {data.get('firstName')} - {verification_code}")
+        print(f"📝 DEBUG: Total active sessions: {len(active_sessions)}")
+        
         return jsonify({
             'success': True,
             'data': {
@@ -375,23 +379,33 @@ def retake_photo():
 def admin_stats():
     """Admin statistics endpoint"""
     try:
+        # Debug logging
+        print(f"🔍 DEBUG: Admin stats called. Active sessions count: {len(active_sessions)}")
+        for tablet_id, session in active_sessions.items():
+            print(f"  - {tablet_id}: {session.get('user_name')} ({session.get('state')})")
+        
         total_sessions = len(active_sessions)
         verified_sessions = sum(1 for session in active_sessions.values() 
                                if session.get('state') == 'photo_session' or session.get('verified_at'))
         pending_sessions = sum(1 for session in active_sessions.values() 
                               if session.get('state') == 'verification_needed')
         
+        stats_data = {
+            'total_sessions': total_sessions,
+            'verified_sessions': verified_sessions,
+            'pending_sessions': pending_sessions,
+            'photos_taken': verified_sessions  # Approximate - verified sessions likely took photos
+        }
+        
+        print(f"🔍 DEBUG: Returning stats: {stats_data}")
+        
         return jsonify({
             'success': True,
-            'data': {
-                'total_sessions': total_sessions,
-                'verified_sessions': verified_sessions,
-                'pending_sessions': pending_sessions,
-                'photos_taken': verified_sessions  # Approximate - verified sessions likely took photos
-            }
+            'data': stats_data
         }), 200
         
     except Exception as e:
+        print(f"❌ ERROR in admin_stats: {e}")
         return jsonify({
             'success': False,
             'error': f'Stats failed: {str(e)}'
@@ -401,6 +415,8 @@ def admin_stats():
 def admin_sessions():
     """Admin sessions list endpoint"""
     try:
+        print(f"🔍 DEBUG: Admin sessions called. Active sessions count: {len(active_sessions)}")
+        
         sessions_list = []
         
         for tablet_id, session_data in active_sessions.items():
@@ -462,6 +478,21 @@ def admin_reset():
             'success': False,
             'error': f'Reset failed: {str(e)}'
         }), 500
+
+# ============ Debug Endpoints ============
+
+@app.route('/admin/debug')
+def admin_debug():
+    """Debug endpoint to see current state"""
+    return jsonify({
+        'success': True,
+        'data': {
+            'active_sessions_count': len(active_sessions),
+            'active_sessions': dict(active_sessions),  # Convert to regular dict for JSON
+            'python_version': sys.version.split()[0],
+            'timestamp': datetime.now().isoformat()
+        }
+    }), 200
 
 # ============ Error Handlers ============
 
