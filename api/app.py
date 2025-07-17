@@ -40,6 +40,9 @@ else:
 app.config['SECRET_KEY'] = 'selfie-booth-secret-key-change-in-production'
 app.config['DEBUG'] = False
 
+# In-memory session storage (for simple cross-device communication)
+active_sessions = {}
+
 # ============ Core API Endpoints ============
 
 @app.route('/')
@@ -107,6 +110,18 @@ def register():
         session_id = secrets.token_urlsafe(16)
         verification_code = str(secrets.randbelow(900000) + 100000)
         
+        # Store session in server memory
+        tablet_id = data.get('tablet_id', 'UNKNOWN')
+        active_sessions[tablet_id] = {
+            'session_id': session_id,
+            'verification_code': verification_code,
+            'user_name': data.get('firstName'),
+            'phone': data.get('phone'),
+            'email': data.get('email'),
+            'state': 'verification_needed',
+            'timestamp': datetime.now().isoformat()
+        }
+        
         return jsonify({
             'success': True,
             'data': {
@@ -137,8 +152,20 @@ def verify():
             
         code = data.get('code', '')
         
-        # For testing, accept any 6-digit code
+        # For testing, accept any 6-digit code and update session state
         if len(code) == 6 and code.isdigit():
+            # Find session with matching verification code
+            tablet_id = None
+            for tid, session in active_sessions.items():
+                if session.get('verification_code') == code:
+                    tablet_id = tid
+                    break
+            
+            if tablet_id:
+                # Update session state to verified
+                active_sessions[tablet_id]['state'] = 'photo_session'
+                active_sessions[tablet_id]['verified_at'] = datetime.now().isoformat()
+            
             return jsonify({
                 'success': True,
                 'data': {
@@ -165,19 +192,64 @@ def session_check():
     try:
         tablet_id = request.args.get('tablet_id', 'default')
         
+        # Check if there's an active session for this tablet
+        if tablet_id in active_sessions:
+            session = active_sessions[tablet_id]
+            return jsonify({
+                'success': True,
+                'data': {
+                    'session_state': session['state'],
+                    'tablet_id': tablet_id,
+                    'verification_code': session.get('verification_code'),
+                    'user_name': session.get('user_name'),
+                    'timestamp': datetime.now().isoformat()
+                }
+            }), 200
+        else:
+            return jsonify({
+                'success': True,
+                'data': {
+                    'session_state': 'default',
+                    'tablet_id': tablet_id,
+                    'timestamp': datetime.now().isoformat()
+                }
+            }), 200
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Session check failed: {str(e)}'
+        }), 500
+
+@app.route('/session_complete', methods=['POST', 'OPTIONS'])
+def session_complete():
+    """Mark session as complete and clean up"""
+    if request.method == 'OPTIONS':
+        return '', 200
+        
+    try:
+        if request.is_json:
+            data = request.get_json() or {}
+        else:
+            data = request.form.to_dict()
+            
+        tablet_id = data.get('tablet_id')
+        
+        if tablet_id and tablet_id in active_sessions:
+            # Remove completed session
+            del active_sessions[tablet_id]
+            
         return jsonify({
             'success': True,
             'data': {
-                'session_state': 'default',
-                'tablet_id': tablet_id,
-                'timestamp': datetime.now().isoformat()
+                'message': 'Session completed successfully'
             }
         }), 200
         
     except Exception as e:
         return jsonify({
             'success': False,
-            'error': f'Session check failed: {str(e)}'
+            'error': f'Session completion failed: {str(e)}'
         }), 500
 
 # ============ QR Code Generation Endpoint ============
