@@ -397,14 +397,27 @@ def admin_sessions():
 
 @app.route('/admin/reset', methods=['POST'])
 def admin_reset():
-    """Admin reset sessions endpoint (placeholder)"""
-    return jsonify({
-        'success': True,
-        'data': {
-            'deleted_count': 0,
-            'message': 'Reset not yet implemented'
-        }
-    }), 200
+    """Admin reset sessions endpoint"""
+    try:
+        # Count current sessions before clearing
+        deleted_count = len(active_sessions)
+        
+        # Clear all active sessions
+        active_sessions.clear()
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'deleted_count': deleted_count,
+                'message': f'Successfully reset {deleted_count} sessions'
+            }
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Reset failed: {str(e)}'
+        }), 500
 
 # ============ Error Handlers ============
 

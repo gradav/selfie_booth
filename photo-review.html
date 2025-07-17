@@ -190,6 +190,7 @@
         function checkForPhoto() {
             const photoKey = `photo_${tabletId}`;
             const storedPhoto = localStorage.getItem(photoKey);
+            console.log(`📱 MOBILE: Checking for photo: ${photoKey} = ${storedPhoto ? 'FOUND' : 'NOT FOUND'}`);
             
             if (storedPhoto) {
                 try {

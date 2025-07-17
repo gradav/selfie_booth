@@ -521,6 +521,9 @@
                     reader.onload = () => {
                         const base64Photo = reader.result;
                         
+                        // Clear any old photo data first
+                        localStorage.removeItem(`photo_${this.tabletId}`);
+                        
                         // Store photo for mobile review
                         const photoData = {
                             tablet_id: this.tabletId,
@@ -529,6 +532,7 @@
                         };
                         
                         localStorage.setItem(`photo_${this.tabletId}`, JSON.stringify(photoData));
+                        console.log(`📸 KIOSK: Stored fresh photo: photo_${this.tabletId}`);
                         
                         // Stop camera stream
                         const stream = video.srcObject;
@@ -558,6 +562,9 @@
                 try {
                     const base64Photo = canvas.toDataURL('image/jpeg', 0.8);
                     
+                    // Clear any old photo data first
+                    localStorage.removeItem(`photo_${this.tabletId}`);
+                    
                     // Store photo for mobile review
                     const photoData = {
                         tablet_id: this.tabletId,
@@ -566,6 +573,7 @@
                     };
                     
                     localStorage.setItem(`photo_${this.tabletId}`, JSON.stringify(photoData));
+                    console.log(`📸 KIOSK: Stored fresh photo: photo_${this.tabletId}`);
                     
                     // Stop camera stream
                     const stream = video.srcObject;
@@ -668,6 +676,26 @@
             } catch (error) {
                 console.log('Failed to clear server session:', error);
             }
+        }
+        
+        clearAllLocalStorage() {
+            // Clear all selfie booth related localStorage
+            const keysToRemove = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key && (key.startsWith('session_') || key.startsWith('verification_') || 
+                           key.startsWith('retake_') || key.startsWith('photo_') || 
+                           key.startsWith('qr_cache_'))) {
+                    keysToRemove.push(key);
+                }
+            }
+            
+            keysToRemove.forEach(key => {
+                localStorage.removeItem(key);
+                console.log(`🧹 Cleared localStorage: ${key}`);
+            });
+            
+            console.log(`🧹 Cleared ${keysToRemove.length} localStorage items`);
         }
         
         // ============ Improved Session Monitoring ============
@@ -826,6 +854,14 @@
     // Initialize when DOM is ready
     document.addEventListener('DOMContentLoaded', function() {
         window.kioskManager = new SimpleKioskManager();
+        
+        // Add keyboard shortcut for clearing localStorage (Ctrl+Shift+C)
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.shiftKey && e.key === 'C') {
+                console.log('🧹 Manual localStorage clear triggered');
+                window.kioskManager.clearAllLocalStorage();
+            }
+        });
     });
     
     
