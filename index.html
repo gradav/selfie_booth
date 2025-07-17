@@ -94,6 +94,7 @@
             this.currentScreen = 'welcome';
             this.sessionMonitoringInterval = null;
             this.currentUserName = null;
+            this.photoInProgress = false;
             
             
             this.init();
@@ -330,6 +331,7 @@
                 
                 // Initialize camera if switching to camera screen
                 if (screenName === 'camera-screen') {
+                    this.photoInProgress = true;
                     this.updateCameraGreeting();
                     this.resetCameraState();
                     this.initializeCamera();
@@ -482,6 +484,16 @@
             const cameraStatus = document.getElementById('camera-status');
             const photoDisplay = document.getElementById('photo-display');
             
+            // Check if video is ready
+            if (!video || !video.videoWidth || !video.videoHeight) {
+                console.error('Video not ready for capture');
+                cameraStatus.textContent = 'Camera not ready. Please try again.';
+                setTimeout(() => {
+                    this.showScreen('welcome-screen');
+                }, 3000);
+                return;
+            }
+            
             // Set canvas size to match video
             canvas.width = video.videoWidth;
             canvas.height = video.videoHeight;
@@ -597,6 +609,9 @@
                 // Clear session on server to prevent cycling
                 this.clearServerSession();
                 
+                // Reset photo progress flag
+                this.photoInProgress = false;
+                
                 this.showScreen('welcome-screen');
             }, 5000);
         }
@@ -682,6 +697,12 @@
         
         async checkSessionState() {
             console.log(`🔍 Checking session state for tablet: ${this.tabletId}`);
+            
+            // Skip session checking if we're in camera mode or photo in progress to prevent cycling
+            if (this.currentScreen === 'camera' || this.photoInProgress) {
+                console.log('📷 Skipping session check - camera active or photo in progress');
+                return;
+            }
             
             // Check localStorage for retake signal first
             const retakeKey = `retake_${this.tabletId}`;
