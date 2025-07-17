@@ -4,7 +4,172 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Selfie Booth - Registration</title>
-    <link rel="stylesheet" href="assets/css/mobile.css">
+    <style>
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-sizing: border-box;
+        }
+
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            max-width: 400px;
+            width: 100%;
+        }
+
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 28px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            box-sizing: border-box;
+            background: #ffffff;
+            color: #333333;
+            font-family: 'Arial', sans-serif;
+        }
+
+        input[type="text"]:focus {
+            border-color: #667eea;
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 20px;
+            gap: 10px;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            margin-top: 4px;
+            transform: scale(1.2);
+            accent-color: #667eea;
+        }
+
+        .checkbox-group label {
+            margin-bottom: 0;
+            font-size: 14px;
+            line-height: 1.4;
+            cursor: pointer;
+            flex: 1;
+        }
+
+        .submit-btn {
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: transform 0.2s ease;
+        }
+
+        .submit-btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .submit-btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .error {
+            color: #e74c3c;
+            margin-top: 10px;
+            text-align: center;
+            font-size: 14px;
+            padding: 10px;
+            background: #ffeaea;
+            border: 1px solid #e74c3c;
+            border-radius: 4px;
+            display: none;
+        }
+
+        .success {
+            color: #27ae60;
+            margin-top: 10px;
+            text-align: center;
+            font-size: 14px;
+            padding: 10px;
+            background: #eafaf1;
+            border: 1px solid #27ae60;
+            border-radius: 4px;
+            display: none;
+        }
+
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            z-index: 9999;
+        }
+
+        .loading-overlay.active {
+            display: flex;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin-bottom: 20px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -13,21 +178,21 @@
         <form id="registration-form">
             <div class="form-group">
                 <label for="firstName">First Name *</label>
-                <input type="text" id="firstName" name="firstName" required maxlength="50">
+                <input type="text" id="firstName" name="firstName" autocomplete="off">
             </div>
             
             <div class="form-group">
                 <label for="phone">Phone Number *</label>
-                <input type="tel" id="phone" name="phone" placeholder="(555) 123-4567" required>
+                <input type="text" id="phone" name="phone" placeholder="(555) 123-4567" autocomplete="off">
             </div>
             
             <div class="form-group">
                 <label for="email">Email (Optional)</label>
-                <input type="email" id="email" name="email" maxlength="100">
+                <input type="text" id="email" name="email" autocomplete="off">
             </div>
             
             <div class="checkbox-group">
-                <input type="checkbox" id="consent" name="consent" required>
+                <input type="checkbox" id="consent" name="consent">
                 <label for="consent">I agree to receive my photo via text</label>
             </div>
             
@@ -44,9 +209,109 @@
         <div class="loading-text">Registering...</div>
     </div>
 
-    <script src="assets/js/config.js"></script>
-    <script src="assets/js/api.js"></script>
-    <script src="assets/js/utils.js"></script>
-    <script src="assets/js/mobile.js"></script>
+    <script>
+        // Simple form handler
+        document.getElementById('registration-form').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            // Get form values
+            const firstName = document.getElementById('firstName').value.trim();
+            const phone = document.getElementById('phone').value.trim();
+            const email = document.getElementById('email').value.trim();
+            const consent = document.getElementById('consent').checked;
+            
+            // Simple validation
+            if (!firstName) {
+                showError('Please enter your first name');
+                return;
+            }
+            if (!phone) {
+                showError('Please enter your phone number');
+                return;
+            }
+            if (!consent) {
+                showError('Please agree to receive your photo via text');
+                return;
+            }
+            
+            // Show loading
+            document.getElementById('loading-overlay').classList.add('active');
+            document.getElementById('submit-btn').disabled = true;
+            
+            try {
+                // Get URL parameters
+                const urlParams = new URLSearchParams(window.location.search);
+                const tabletId = urlParams.get('tablet_id') || 'UNKNOWN';
+                const location = urlParams.get('location') || 'unknown';
+                
+                // Submit to API
+                
+                const response = await fetch('/selfie_booth/api/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        firstName: firstName,
+                        phone: phone,
+                        email: email,
+                        consent: consent,
+                        tablet_id: tabletId,
+                        location: location
+                    })
+                });
+                
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Registration failed: ${response.status} ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                
+                // Store session data in localStorage for kiosk to pick up
+                const sessionData = {
+                    tablet_id: tabletId,
+                    session_id: data.data.session_id,
+                    verification_code: data.data.verification_code,
+                    user_name: data.data.user_name,
+                    timestamp: Date.now()
+                };
+                
+                localStorage.setItem(`session_${tabletId}`, JSON.stringify(sessionData));
+                
+                // Show success
+                showSuccess('Registration successful! Look at the kiosk screen for your verification code.');
+                
+                // Redirect after showing success message
+                setTimeout(() => {
+                    window.location.href = `verify-new.html?tablet_id=${tabletId}&location=${location}`;
+                }, 2000);
+                
+            } catch (error) {
+                showError('Registration failed. Please try again.');
+            } finally {
+                document.getElementById('loading-overlay').classList.remove('active');
+                document.getElementById('submit-btn').disabled = false;
+            }
+        });
+        
+        function showError(message) {
+            const errorDiv = document.getElementById('error-message');
+            const successDiv = document.getElementById('success-message');
+            
+            successDiv.style.display = 'none';
+            errorDiv.textContent = message;
+            errorDiv.style.display = 'block';
+        }
+        
+        function showSuccess(message) {
+            const errorDiv = document.getElementById('error-message');
+            const successDiv = document.getElementById('success-message');
+            
+            errorDiv.style.display = 'none';
+            successDiv.textContent = message;
+            successDiv.style.display = 'block';
+        }
+    </script>
 </body>
 </html>

@@ -438,3 +438,82 @@ h1 {
         font-size: 18px;
     }
 }
+
+/* Camera Screen Styles */
+.camera-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    padding: 20px;
+}
+
+.camera-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    background: rgba(255, 255, 255, 0.1);
+    padding: 30px;
+    border-radius: 20px;
+    backdrop-filter: blur(10px);
+}
+
+#camera-video {
+    width: 640px;
+    height: 480px;
+    border-radius: 15px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    background: #000;
+}
+
+.camera-controls {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+}
+
+.camera-status {
+    color: #fff;
+    font-size: 18px;
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+    margin-top: 10px;
+}
+
+#camera-greeting {
+    color: #fff;
+    font-size: 2.5em;
+    margin-bottom: 20px;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+/* Responsive camera styles */
+@media screen and (max-width: 1024px) {
+    #camera-video {
+        width: 100%;
+        max-width: 480px;
+        height: auto;
+    }
+    
+    #camera-greeting {
+        font-size: 2em;
+    }
+}
+
+@media screen and (max-width: 768px) {
+    .camera-section {
+        padding: 20px;
+    }
+    
+    #camera-video {
+        width: 100%;
+        max-width: 360px;
+        height: auto;
+    }
+    
+    #camera-greeting {
+        font-size: 1.5em;
+    }
+}

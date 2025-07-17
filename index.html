@@ -54,7 +54,7 @@
             <div class="code-display">
                 <div class="code-label">Enter this code on your phone:</div>
                 <div id="verification-code" class="code">000000</div>
-                <div class="expires-in" id="countdown">Expires in 2:00</div>
+                <div class="expires-in" id="verification-countdown">Expires in 2:00</div>
             </div>
             
             <div class="instructions">
@@ -66,8 +66,19 @@
 
     <!-- Camera/Photo Session Screen -->
     <div id="camera-screen" class="screen">
-        <div class="greeting">
+        <div class="camera-container">
             <h1 id="camera-greeting">Hi [Name], smile for the camera!</h1>
+            
+            <div class="camera-section">
+                <video id="camera-video" autoplay playsinline></video>
+                <canvas id="camera-canvas" style="display: none;"></canvas>
+                <img id="photo-display" style="display: none; width: 640px; height: 480px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);" alt="Captured photo">
+                
+                <div class="camera-controls">
+                    <div id="camera-countdown" class="countdown"></div>
+                    <div id="camera-status" class="camera-status">Starting camera...</div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -75,18 +86,20 @@
     <script>
     class SimpleKioskManager {
         constructor() {
-            this.tabletId = 'TABLET1';
-            this.location = 'lobby';
+            // Get tablet_id and location from URL parameters or use defaults
+            const urlParams = new URLSearchParams(window.location.search);
+            this.tabletId = urlParams.get('tablet_id') || 'TABLET1';
+            this.location = urlParams.get('location') || 'lobby';
             this.mobileUrl = `${window.location.origin}/selfie_booth/mobile.html?tablet_id=${this.tabletId}&location=${this.location}`;
             this.currentScreen = 'welcome';
             this.sessionMonitoringInterval = null;
+            this.currentUserName = null;
+            
             
             this.init();
         }
         
         init() {
-            console.log('🖥️ Initializing kiosk display');
-            
             // Update tablet info
             this.updateTabletInfo();
             
@@ -95,8 +108,6 @@
             
             // Start session monitoring
             this.startSessionMonitoring();
-            
-            console.log('✅ Kiosk display initialized');
         }
         
         updateTabletInfo() {
@@ -150,14 +161,12 @@
                                  onmouseenter="this.style.transform='scale(1.05)'"
                                  onmouseleave="this.style.transform='scale(1)'">
                         `;
-                        console.log('✅ QR code loaded from cache');
                         return true;
                     } else {
                         // Cache expired, remove it
                         localStorage.removeItem(cacheKey);
                     }
                 } catch (error) {
-                    console.log('⚠️ Invalid QR cache data, regenerating');
                     localStorage.removeItem(cacheKey);
                 }
             }
@@ -189,17 +198,14 @@
                              style="border: 10px solid white; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); transition: transform 0.3s ease;"
                              onmouseenter="this.style.transform='scale(1.05)'"
                              onmouseleave="this.style.transform='scale(1)'"
-                             onload="console.log('✅ Server QR code loaded')">
                     `;
                     
                     // Cache the server-generated QR code
                     this.cacheServerQRCode(imageUrl);
-                    
-                    console.log('✅ QR code generated server-side');
                     return true;
                 }
             } catch (error) {
-                console.log('⚠️ Server QR generation failed, using client-side');
+                // Server QR generation failed, fall back to client-side
             }
             
             return false;
@@ -237,10 +243,7 @@
                     qrElement.innerHTML = '';
                     qrElement.appendChild(canvas);
                     
-                    console.log('✅ QR code generated with QRious (client-side)');
-                    
                 } catch (error) {
-                    console.error('❌ QRious generation error:', error);
                     this.showQRFallback(qrElement);
                 }
             });
@@ -257,9 +260,8 @@
                 };
                 
                 localStorage.setItem(cacheKey, JSON.stringify(cacheData));
-                console.log('💾 QR code cached for future use');
             } catch (error) {
-                console.log('⚠️ Failed to cache QR code:', error);
+                // Failed to cache QR code
             }
         }
         
@@ -279,11 +281,10 @@
                     };
                     
                     localStorage.setItem(cacheKey, JSON.stringify(cacheData));
-                    console.log('💾 Server QR code cached for future use');
                 };
                 reader.readAsDataURL(blob);
             } catch (error) {
-                console.log('⚠️ Failed to cache server QR code:', error);
+                // Failed to cache server QR code
             }
         }
         
@@ -295,7 +296,6 @@
                     this.waitForQRious(callback, attempts + 1);
                 }, 100);
             } else {
-                console.warn('⚠️ QRious library failed to load, showing fallback');
                 this.showQRFallback(document.getElementById('qrcode'));
             }
         }
@@ -327,8 +327,224 @@
             if (targetScreen) {
                 targetScreen.classList.add('active');
                 this.currentScreen = screenName.replace('-screen', '');
-                console.log(`🖥️ Switched to ${screenName}`);
+                
+                // Initialize camera if switching to camera screen
+                if (screenName === 'camera-screen') {
+                    this.updateCameraGreeting();
+                    this.resetCameraState();
+                    this.initializeCamera();
+                }
             }
+        }
+        
+        // ============ Camera Functionality ============
+        
+        resetCameraState() {
+            const video = document.getElementById('camera-video');
+            const photoDisplay = document.getElementById('photo-display');
+            const countdown = document.getElementById('camera-countdown');
+            const cameraStatus = document.getElementById('camera-status');
+            
+            // Reset video and photo display
+            if (video) {
+                video.style.display = 'block';
+                // Stop any existing video stream
+                if (video.srcObject) {
+                    const tracks = video.srcObject.getTracks();
+                    tracks.forEach(track => track.stop());
+                    video.srcObject = null;
+                }
+            }
+            
+            if (photoDisplay) {
+                photoDisplay.style.display = 'none';
+                photoDisplay.src = '';
+            }
+            
+            // Reset countdown and status
+            if (countdown) {
+                countdown.textContent = '';
+                countdown.style.display = 'none';
+            }
+            
+            if (cameraStatus) {
+                cameraStatus.textContent = 'Starting camera...';
+            }
+        }
+        
+        updateCameraGreeting() {
+            const greetingElement = document.getElementById('camera-greeting');
+            if (greetingElement) {
+                const userName = this.currentUserName || 'User';
+                greetingElement.textContent = `Hi ${userName}, smile for the camera!`;
+            }
+        }
+        
+        async initializeCamera() {
+            const video = document.getElementById('camera-video');
+            const canvas = document.getElementById('camera-canvas');
+            const cameraStatus = document.getElementById('camera-status');
+            
+            if (!video || !canvas || !cameraStatus) {
+                cameraStatus.textContent = 'Camera setup error';
+                return;
+            }
+            
+            // Check if camera APIs are available
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                cameraStatus.textContent = 'Camera not supported in this browser. Please use a modern browser.';
+                return;
+            }
+            
+            // Check if we're on HTTPS (required for camera access)
+            if (location.protocol !== 'https:' && location.hostname !== 'localhost') {
+                cameraStatus.textContent = 'Camera requires secure connection (HTTPS).';
+                return;
+            }
+            
+            try {
+                cameraStatus.textContent = 'Requesting camera access...';
+                
+                // Request camera permissions
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: { 
+                        width: { ideal: 640 },
+                        height: { ideal: 480 },
+                        facingMode: 'user' // Front camera
+                    },
+                    audio: false
+                });
+                
+                video.srcObject = stream;
+                cameraStatus.textContent = 'Get ready! Photo will be taken automatically...';
+                
+                // Wait for video to be ready, then start automatic countdown
+                video.onloadedmetadata = () => {
+                    setTimeout(() => {
+                        this.startAutomaticCapture();
+                    }, 2000); // 2 second delay to let user get ready
+                };
+                
+            } catch (error) {
+                
+                let errorMessage = 'Camera not available. ';
+                if (error.name === 'NotAllowedError') {
+                    errorMessage += 'Please allow camera access.';
+                } else if (error.name === 'NotFoundError') {
+                    errorMessage += 'No camera found.';
+                } else if (error.name === 'NotReadableError') {
+                    errorMessage += 'Camera is already in use.';
+                } else {
+                    errorMessage += 'Please check permissions and try again.';
+                }
+                
+                cameraStatus.textContent = errorMessage;
+            }
+        }
+        
+        startAutomaticCapture() {
+            const video = document.getElementById('camera-video');
+            const canvas = document.getElementById('camera-canvas');
+            const countdown = document.getElementById('camera-countdown');
+            const cameraStatus = document.getElementById('camera-status');
+            
+            if (!video || !canvas || !countdown) {
+                return;
+            }
+            
+            cameraStatus.textContent = 'Photo will be taken in...';
+            
+            // Start 5-second countdown
+            let count = 5;
+            countdown.textContent = count;
+            countdown.style.display = 'block';
+            
+            const countdownInterval = setInterval(() => {
+                count--;
+                if (count > 0) {
+                    countdown.textContent = count;
+                } else {
+                    countdown.textContent = 'Smile! 📸';
+                    clearInterval(countdownInterval);
+                    
+                    // Capture after short delay
+                    setTimeout(() => {
+                        this.takePhoto();
+                        countdown.style.display = 'none';
+                    }, 500);
+                }
+            }, 1000);
+        }
+        
+        takePhoto() {
+            const video = document.getElementById('camera-video');
+            const canvas = document.getElementById('camera-canvas');
+            const cameraStatus = document.getElementById('camera-status');
+            const photoDisplay = document.getElementById('photo-display');
+            
+            // Set canvas size to match video
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            
+            // Draw video frame to canvas
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0);
+            
+            // Convert to blob
+            canvas.toBlob((blob) => {
+                cameraStatus.textContent = 'Photo taken! Processing...';
+                
+                // Convert blob to base64 for localStorage
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const base64Photo = reader.result;
+                    
+                    // Store photo for mobile review
+                    const photoData = {
+                        tablet_id: this.tabletId,
+                        photo: base64Photo,
+                        timestamp: Date.now()
+                    };
+                    
+                    localStorage.setItem(`photo_${this.tabletId}`, JSON.stringify(photoData));
+                    
+                    // Stop camera stream
+                    const stream = video.srcObject;
+                    if (stream) {
+                        const tracks = stream.getTracks();
+                        tracks.forEach(track => track.stop());
+                    }
+                    
+                    // Show the captured photo on kiosk
+                    this.showCapturedPhoto(base64Photo);
+                };
+                
+                reader.readAsDataURL(blob);
+                
+            }, 'image/jpeg', 0.8);
+        }
+        
+        showCapturedPhoto(base64Photo) {
+            const video = document.getElementById('camera-video');
+            const photoDisplay = document.getElementById('photo-display');
+            const cameraStatus = document.getElementById('camera-status');
+            
+            // Hide video, show photo
+            video.style.display = 'none';
+            photoDisplay.style.display = 'block';
+            photoDisplay.src = base64Photo;
+            
+            // Update status message
+            cameraStatus.textContent = 'Photo taken! Check your phone to keep or retake.';
+            
+            // Return to welcome screen after 5 seconds
+            setTimeout(() => {
+                // Hide photo, show video again for next user
+                photoDisplay.style.display = 'none';
+                video.style.display = 'block';
+                
+                this.showScreen('welcome-screen');
+            }, 5000);
         }
         
         showVerificationCode(code, userName = 'User') {
@@ -338,12 +554,15 @@
             if (codeElement) codeElement.textContent = code;
             if (greetingElement) greetingElement.textContent = `Hi ${userName}!`;
             
+            // Store user name for later use
+            this.currentUserName = userName;
+            
             this.showScreen('verification-screen');
             this.startCountdown(120);
         }
         
         startCountdown(seconds) {
-            const countdownElement = document.getElementById('countdown');
+            const countdownElement = document.getElementById('verification-countdown');
             if (!countdownElement) return;
             
             const updateCountdown = () => {
@@ -370,12 +589,10 @@
             // Check if session_check endpoint exists first
             this.checkEndpointAvailability().then(available => {
                 if (available) {
-                    console.log('✅ Session monitoring enabled');
                     this.sessionMonitoringInterval = setInterval(() => {
                         this.checkSessionState();
                     }, 3000);
                 } else {
-                    console.log('⚠️ Session monitoring disabled - endpoint not available');
                     // Try again in 30 seconds in case API comes online
                     setTimeout(() => this.startSessionMonitoring(), 30000);
                 }
@@ -384,7 +601,7 @@
         
         async checkEndpointAvailability() {
             try {
-                const response = await fetch('/api/session_check?tablet_id=' + this.tabletId);
+                const response = await fetch('/selfie_booth/api/session_check?tablet_id=' + this.tabletId);
                 return response.status !== 404;
             } catch (error) {
                 return false;
@@ -392,12 +609,90 @@
         }
         
         async checkSessionState() {
+            // Check localStorage for retake signal first
+            const retakeKey = `retake_${this.tabletId}`;
+            const retakeSignal = localStorage.getItem(retakeKey);
+            
+            if (retakeSignal) {
+                try {
+                    const retakeData = JSON.parse(retakeSignal);
+                    
+                    // Check if retake is recent (within 2 minutes)
+                    const twoMinutes = 2 * 60 * 1000;
+                    if (Date.now() - retakeData.timestamp < twoMinutes) {
+                        // Switch to camera screen for retake
+                        this.showScreen('camera-screen');
+                        
+                        // Clear the retake signal
+                        localStorage.removeItem(retakeKey);
+                        return;
+                    } else {
+                        // Retake signal is old, remove it
+                        localStorage.removeItem(retakeKey);
+                    }
+                } catch (error) {
+                    localStorage.removeItem(retakeKey);
+                }
+            }
+            
+            // Check localStorage for verification complete signal
+            const verificationKey = `verification_${this.tabletId}`;
+            const verificationComplete = localStorage.getItem(verificationKey);
+            
+            if (verificationComplete) {
+                try {
+                    const verificationData = JSON.parse(verificationComplete);
+                    
+                    // Check if verification is recent (within 2 minutes)
+                    const twoMinutes = 2 * 60 * 1000;
+                    if (Date.now() - verificationData.timestamp < twoMinutes) {
+                        // Switch to camera screen
+                        this.showScreen('camera-screen');
+                        
+                        // Clear the verification data
+                        localStorage.removeItem(verificationKey);
+                        return;
+                    } else {
+                        // Verification is old, remove it
+                        localStorage.removeItem(verificationKey);
+                    }
+                } catch (error) {
+                    localStorage.removeItem(verificationKey);
+                }
+            }
+            
+            // Check localStorage for new session data first
+            const sessionKey = `session_${this.tabletId}`;
+            const storedSession = localStorage.getItem(sessionKey);
+            
+            if (storedSession) {
+                try {
+                    const sessionData = JSON.parse(storedSession);
+                    
+                    // Check if session is recent (within 5 minutes)
+                    const fiveMinutes = 5 * 60 * 1000;
+                    if (Date.now() - sessionData.timestamp < fiveMinutes) {
+                        // Show verification code
+                        this.showVerificationCode(sessionData.verification_code, sessionData.user_name);
+                        
+                        // Clear the session data so we don't show it again
+                        localStorage.removeItem(sessionKey);
+                        return;
+                    } else {
+                        // Session is old, remove it
+                        localStorage.removeItem(sessionKey);
+                    }
+                } catch (error) {
+                    localStorage.removeItem(sessionKey);
+                }
+            }
+            
+            // Fallback to API check (keeping original functionality)
             try {
-                const response = await fetch('/api/session_check?tablet_id=' + this.tabletId);
+                const response = await fetch('/selfie_booth/api/session_check?tablet_id=' + this.tabletId);
                 
                 if (response.status === 404) {
                     // Endpoint went away, stop monitoring
-                    console.log('⚠️ Session endpoint unavailable, stopping monitoring');
                     if (this.sessionMonitoringInterval) {
                         clearInterval(this.sessionMonitoringInterval);
                         this.sessionMonitoringInterval = null;
@@ -407,13 +702,12 @@
                 
                 const data = await response.json();
                 
+                // Handle API session state changes
                 if (data.success && data.data.session_state !== 'default') {
-                    console.log('📱 Session state changed:', data.data.session_state);
                     this.handleSessionState(data.data);
                 }
             } catch (error) {
-                // Network error - don't spam console, just fail silently
-                console.log('📡 Session check failed (network error)');
+                // Network error - fail silently
             }
         }
         
@@ -433,14 +727,9 @@
     
     // Initialize when DOM is ready
     document.addEventListener('DOMContentLoaded', function() {
-        console.log('🖥️ DOM loaded, initializing kiosk...');
         window.kioskManager = new SimpleKioskManager();
     });
     
-    // Test functions for debugging
-    window.testVerificationScreen = () => window.kioskManager.showVerificationCode('123456', 'Test User');
-    window.testCameraScreen = () => window.kioskManager.showScreen('camera-screen');
-    window.testWelcomeScreen = () => window.kioskManager.showScreen('welcome-screen');
     
     </script>
 </body>
