@@ -629,13 +629,18 @@
             cameraStatus.textContent = 'Photo taken! Check your phone to keep or retake.';
             
             // Return to welcome screen after 5 seconds
-            setTimeout(() => {
+            setTimeout(async () => {
                 // Hide photo, show video again for next user
                 photoDisplay.style.display = 'none';
                 video.style.display = 'block';
                 
-                // Clear session on server to prevent cycling
-                this.clearServerSession();
+                // Clear session on server and get session history ID
+                const sessionHistoryId = await this.clearServerSession();
+                
+                // Save the image to server if we have a session history ID
+                if (sessionHistoryId && base64Photo) {
+                    await this.saveSessionImage(sessionHistoryId, base64Photo);
+                }
                 
                 // Reset photo progress flag
                 this.photoInProgress = false;
@@ -684,7 +689,7 @@
         
         async clearServerSession() {
             try {
-                await fetch('/selfie_booth/api/session_complete', {
+                const response = await fetch('/selfie_booth/api/session_complete', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -693,8 +698,32 @@
                         tablet_id: this.tabletId
                     })
                 });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    return data.data.session_history_id; // Return the session history ID
+                }
             } catch (error) {
                 console.log('Failed to clear server session:', error);
+            }
+            return null;
+        }
+        
+        async saveSessionImage(sessionHistoryId, imageData) {
+            try {
+                await fetch('/selfie_booth/api/save_image', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        session_history_id: sessionHistoryId,
+                        image_data: imageData
+                    })
+                });
+                console.log('📸 KIOSK: Session image saved to server');
+            } catch (error) {
+                console.log('Failed to save session image:', error);
             }
         }
         

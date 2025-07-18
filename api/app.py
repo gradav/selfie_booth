@@ -7,6 +7,7 @@ Complete version with QR code generation endpoint
 import sys
 import os
 import json
+import base64
 from datetime import datetime
 from io import BytesIO
 
@@ -76,6 +77,105 @@ def save_cumulative_stats():
 
 # Load existing stats on startup
 cumulative_stats = load_cumulative_stats()
+
+# Session history storage
+SESSION_HISTORY_FILE = os.path.join(current_dir, 'session_history.json')
+IMAGES_DIR = os.path.join(current_dir, 'session_images')
+
+def ensure_images_dir():
+    """Create images directory if it doesn't exist"""
+    if not os.path.exists(IMAGES_DIR):
+        os.makedirs(IMAGES_DIR)
+        print(f"📁 Created images directory: {IMAGES_DIR}")
+
+def load_session_history():
+    """Load session history from file"""
+    try:
+        if os.path.exists(SESSION_HISTORY_FILE):
+            with open(SESSION_HISTORY_FILE, 'r') as f:
+                history = json.load(f)
+                print(f"📋 Loaded {len(history)} historical sessions")
+                return history
+    except Exception as e:
+        print(f"❌ Error loading session history: {e}")
+    return []
+
+def save_session_to_history(session_data):
+    """Save a session to the permanent history"""
+    try:
+        history = load_session_history()
+        
+        # Add timestamp and unique ID
+        session_record = {
+            'id': f"{session_data['tablet_id']}_{int(datetime.now().timestamp())}",
+            'tablet_id': session_data['tablet_id'],
+            'session_id': session_data['session_id'],
+            'user_name': session_data['user_name'],
+            'phone': session_data['phone'],
+            'email': session_data.get('email', ''),
+            'verification_code': session_data['verification_code'],
+            'created_at': session_data['timestamp'],
+            'verified_at': session_data.get('verified_at', ''),
+            'completed_at': datetime.now().isoformat(),
+            'state': session_data.get('state', 'completed'),
+            'image_filename': None  # Will be set when image is saved
+        }
+        
+        history.append(session_record)
+        
+        # Keep only last 1000 sessions to prevent file from growing too large
+        if len(history) > 1000:
+            history = history[-1000:]
+        
+        with open(SESSION_HISTORY_FILE, 'w') as f:
+            json.dump(history, f, indent=2)
+            
+        print(f"📋 Saved session to history: {session_record['user_name']} (Total: {len(history)})")
+        return session_record['id']
+        
+    except Exception as e:
+        print(f"❌ Error saving session to history: {e}")
+        return None
+
+def save_session_image(session_id, image_data):
+    """Save session image to file"""
+    try:
+        ensure_images_dir()
+        
+        # Remove data URL prefix if present
+        if image_data.startswith('data:image/'):
+            image_data = image_data.split(',')[1]
+        
+        # Decode base64 image
+        image_bytes = base64.b64decode(image_data)
+        
+        # Save with timestamp-based filename
+        filename = f"{session_id}.jpg"
+        filepath = os.path.join(IMAGES_DIR, filename)
+        
+        with open(filepath, 'wb') as f:
+            f.write(image_bytes)
+            
+        print(f"📸 Saved session image: {filename} ({len(image_bytes)} bytes)")
+        
+        # Update session history with image filename
+        history = load_session_history()
+        for session in history:
+            if session['id'] == session_id:
+                session['image_filename'] = filename
+                break
+        
+        with open(SESSION_HISTORY_FILE, 'w') as f:
+            json.dump(history, f, indent=2)
+            
+        return filename
+        
+    except Exception as e:
+        print(f"❌ Error saving session image: {e}")
+        return None
+
+# Initialize on startup
+ensure_images_dir()
 
 # ============ Core API Endpoints ============
 
@@ -284,18 +384,24 @@ def session_complete():
             
         tablet_id = data.get('tablet_id')
         
+        session_history_id = None
+        
         if tablet_id and tablet_id in active_sessions:
-            # Remove completed session
+            # Save session to permanent history before removing
             session_data = active_sessions[tablet_id]
+            session_history_id = save_session_to_history(session_data)
+            
+            # Remove from active sessions
             del active_sessions[tablet_id]
             
             print(f"📝 DEBUG: Session completed for {tablet_id}. Cumulative stats: {cumulative_stats}")
-            print(f"📝 DEBUG: Removed session: {session_data.get('user_name')} ({session_data.get('state')})")
+            print(f"📝 DEBUG: Saved session to history: {session_data.get('user_name')} ({session_data.get('state')})")
             
         return jsonify({
             'success': True,
             'data': {
                 'message': 'Session completed successfully',
+                'session_history_id': session_history_id,
                 'cumulative_stats': cumulative_stats  # Include stats in response for debugging
             }
         }), 200
@@ -304,6 +410,49 @@ def session_complete():
         return jsonify({
             'success': False,
             'error': f'Session completion failed: {str(e)}'
+        }), 500
+
+@app.route('/save_image', methods=['POST', 'OPTIONS'])
+def save_image():
+    """Save session image to permanent storage"""
+    if request.method == 'OPTIONS':
+        return '', 200
+        
+    try:
+        if request.is_json:
+            data = request.get_json() or {}
+        else:
+            data = request.form.to_dict()
+            
+        session_history_id = data.get('session_history_id')
+        image_data = data.get('image_data')
+        
+        if not session_history_id or not image_data:
+            return jsonify({
+                'success': False,
+                'error': 'session_history_id and image_data are required'
+            }), 400
+            
+        filename = save_session_image(session_history_id, image_data)
+        
+        if filename:
+            return jsonify({
+                'success': True,
+                'data': {
+                    'filename': filename,
+                    'message': 'Image saved successfully'
+                }
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to save image'
+            }), 500
+            
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Image save failed: {str(e)}'
         }), 500
 
 # ============ QR Code Generation Endpoint ============
@@ -550,6 +699,40 @@ def admin_reset():
         }), 500
 
 # ============ Debug Endpoints ============
+
+@app.route('/admin/history')
+def admin_history():
+    """Admin session history endpoint"""
+    try:
+        history = load_session_history()
+        
+        # Sort by most recent first
+        history.sort(key=lambda x: x.get('completed_at', ''), reverse=True)
+        
+        # Optional pagination
+        page = int(request.args.get('page', 1))
+        per_page = int(request.args.get('per_page', 50))
+        start = (page - 1) * per_page
+        end = start + per_page
+        
+        paginated_history = history[start:end]
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'sessions': paginated_history,
+                'total': len(history),
+                'page': page,
+                'per_page': per_page,
+                'total_pages': (len(history) + per_page - 1) // per_page
+            }
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'History retrieval failed: {str(e)}'
+        }), 500
 
 @app.route('/admin/debug')
 def admin_debug():
