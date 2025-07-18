@@ -8,10 +8,19 @@ RewriteEngine On
 # ↑ This was conflicting with Passenger configuration
 
 # Short URL redirects for tablets
-RewriteRule ^1/?$ mobile.html?tablet_id=TABLET1&location=lobby [R=302,L]
-RewriteRule ^2/?$ mobile.html?tablet_id=TABLET2&location=entrance [R=302,L]
-RewriteRule ^3/?$ mobile.html?tablet_id=TABLET3&location=event_hall [R=302,L]
-RewriteRule ^4/?$ mobile.html?tablet_id=TABLET4&location=party_room [R=302,L]
+#RewriteRule ^1/?$ mobile.html?tablet_id=TABLET1&location=lobby [R=302,L]
+#RewriteRule ^2/?$ mobile.html?tablet_id=TABLET2&location=entrance [R=302,L]
+#RewriteRule ^3/?$ mobile.html?tablet_id=TABLET3&location=event_hall [R=302,L]
+#RewriteRule ^4/?$ mobile.html?tablet_id=TABLET4&location=party_room [R=302,L]
+
+RewriteEngine On
+
+# Short URL redirects for tablets (use absolute paths)
+RewriteRule ^1/?$ /selfie_booth/mobile.html?tablet_id=TABLET1&location=lobby [R=302,L]
+RewriteRule ^2/?$ /selfie_booth/mobile.html?tablet_id=TABLET2&location=entrance [R=302,L]
+RewriteRule ^3/?$ /selfie_booth/mobile.html?tablet_id=TABLET3&location=event_hall [R=302,L]
+RewriteRule ^4/?$ /selfie_booth/mobile.html?tablet_id=TABLET4&location=party_room [R=302,L]
+
 
 # Legacy URL support
 RewriteRule ^mobile/?$ mobile.html [L]
