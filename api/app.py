@@ -6,6 +6,7 @@ Complete version with QR code generation endpoint
 
 import sys
 import os
+import json
 from datetime import datetime
 from io import BytesIO
 
@@ -44,11 +45,37 @@ app.config['DEBUG'] = False
 active_sessions = {}
 
 # Cumulative counters for admin dashboard (persist across session clears)
-cumulative_stats = {
-    'total_sessions_created': 0,
-    'total_sessions_verified': 0,
-    'total_photos_taken': 0
-}
+STATS_FILE = os.path.join(current_dir, 'cumulative_stats.json')
+
+def load_cumulative_stats():
+    """Load cumulative stats from file"""
+    try:
+        if os.path.exists(STATS_FILE):
+            with open(STATS_FILE, 'r') as f:
+                stats = json.load(f)
+                print(f"📊 Loaded cumulative stats: {stats}")
+                return stats
+    except Exception as e:
+        print(f"❌ Error loading stats: {e}")
+    
+    # Default stats if file doesn't exist or has errors
+    return {
+        'total_sessions_created': 0,
+        'total_sessions_verified': 0,
+        'total_photos_taken': 0
+    }
+
+def save_cumulative_stats():
+    """Save cumulative stats to file"""
+    try:
+        with open(STATS_FILE, 'w') as f:
+            json.dump(cumulative_stats, f)
+            print(f"💾 Saved cumulative stats: {cumulative_stats}")
+    except Exception as e:
+        print(f"❌ Error saving stats: {e}")
+
+# Load existing stats on startup
+cumulative_stats = load_cumulative_stats()
 
 # ============ Core API Endpoints ============
 
@@ -131,6 +158,7 @@ def register():
         
         # Increment cumulative counter
         cumulative_stats['total_sessions_created'] += 1
+        save_cumulative_stats()  # Persist to file
         
         # Debug log
         print(f"📝 DEBUG: Stored session for {tablet_id}: {data.get('firstName')} - {verification_code}")
@@ -183,6 +211,7 @@ def verify():
                 # Increment cumulative counters
                 cumulative_stats['total_sessions_verified'] += 1
                 cumulative_stats['total_photos_taken'] += 1  # Assume verified sessions take photos
+                save_cumulative_stats()  # Persist to file
                 
                 print(f"📝 DEBUG: Session verified for {tablet_id}. Cumulative verified: {cumulative_stats['total_sessions_verified']}")
             
@@ -257,12 +286,17 @@ def session_complete():
         
         if tablet_id and tablet_id in active_sessions:
             # Remove completed session
+            session_data = active_sessions[tablet_id]
             del active_sessions[tablet_id]
+            
+            print(f"📝 DEBUG: Session completed for {tablet_id}. Cumulative stats: {cumulative_stats}")
+            print(f"📝 DEBUG: Removed session: {session_data.get('user_name')} ({session_data.get('state')})")
             
         return jsonify({
             'success': True,
             'data': {
-                'message': 'Session completed successfully'
+                'message': 'Session completed successfully',
+                'cumulative_stats': cumulative_stats  # Include stats in response for debugging
             }
         }), 200
         
@@ -497,6 +531,7 @@ def admin_reset():
             cumulative_stats['total_sessions_created'] = 0
             cumulative_stats['total_sessions_verified'] = 0
             cumulative_stats['total_photos_taken'] = 0
+            save_cumulative_stats()  # Persist reset to file
             message += f' and cumulative stats (was {old_totals["total_sessions_created"]} total sessions)'
         
         return jsonify({
