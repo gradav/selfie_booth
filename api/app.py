@@ -10,6 +10,7 @@ import json
 import base64
 from datetime import datetime
 from io import BytesIO
+from flask import redirect
 
 # Add current directory to path
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -748,6 +749,19 @@ def admin_history():
             'success': False,
             'error': f'History retrieval failed: {str(e)}'
         }), 500
+
+@app.route('/selfie_booth/<kiosk_number>')
+def kiosk_short_url(kiosk_number):
+    # Only allow numbers 1-50
+    try:
+        num = int(kiosk_number)
+        if not (1 <= num <= 50):
+            return 'Invalid kiosk number', 404
+    except ValueError:
+        return 'Invalid kiosk number', 404
+    # Build the redirect URL
+    target = f'/selfie_booth/mobile.html?tablet_id=KIOSK{num}&location=lobby'
+    return redirect(target)
 
 # ============ Error Handlers ============
 
