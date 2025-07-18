@@ -241,7 +241,7 @@
         let kioskValidated = false;
         let kioskId = null;
         let tabletId = null;
-        let location = null;
+        let kioskLocation = null;
 
         // Check kiosk status on page load
         document.addEventListener('DOMContentLoaded', async function() {
@@ -252,7 +252,7 @@
             const urlParams = new URLSearchParams(window.location.search);
             kioskId = urlParams.get('kiosk_id');
             tabletId = urlParams.get('tablet_id') || 'UNKNOWN';
-            location = urlParams.get('location') || 'unknown';
+            kioskLocation = urlParams.get('location') || 'unknown';
 
             const statusDiv = document.getElementById('kiosk-status');
             const statusText = document.getElementById('kiosk-status-text');
@@ -366,7 +366,7 @@
                         email: email,
                         consent: consent,
                         tablet_id: tabletId,
-                        location: location
+                        location: kioskLocation
                     })
                 });
                 
@@ -393,12 +393,14 @@
                 
                 localStorage.setItem(`session_${tabletId}`, JSON.stringify(sessionData));
                 
+                console.log('📱 Session data stored for kiosk:', sessionData);
+                
                 // Show success
                 showSuccess('Registration successful! Look at the kiosk screen for your verification code.');
                 
                 // Redirect after showing success message
                 setTimeout(() => {
-                    window.location.href = `verify-new.html?tablet_id=${tabletId}&location=${location}&verification_code=${data.data.verification_code}`;
+                    window.location.href = `verify-new.html?tablet_id=${tabletId}&location=${kioskLocation}&verification_code=${data.data.verification_code}`;
                 }, 2000);
                 
             } catch (error) {
