@@ -239,9 +239,9 @@
                     localStorage.setItem(`verification_${tabletId}`, JSON.stringify(verificationComplete));
                     console.log(`📱 MOBILE: Stored verification signal: verification_${tabletId}`, verificationComplete);
                     
-                    // Redirect to photo review page
+                    // Redirect to photo review page, passing verification code in URL
                     setTimeout(() => {
-                        window.location.href = `photo-review.html?tablet_id=${tabletId}&location=${locationParam}`;
+                        window.location.href = `photo-review.html?tablet_id=${tabletId}&location=${locationParam}&verification_code=${code}`;
                     }, 2000);
                 } else {
                     showMessage(data.message || 'Invalid verification code. Please try again.', 'error');

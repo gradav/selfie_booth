@@ -177,7 +177,7 @@
         const tabletId = urlParams.get('tablet_id') || 'TABLET1';
         const locationParam = urlParams.get('location') || 'lobby';
 
-        // Get verification code from session data in localStorage
+        // Get verification code from session data in localStorage, or from URL as fallback
         let verificationCode = null;
         const sessionKey = `session_${tabletId}`;
         const sessionDataRaw = localStorage.getItem(sessionKey);
@@ -188,6 +188,10 @@
             } catch (e) {
                 verificationCode = null;
             }
+        }
+        // Fallback: get verification_code from URL if not found in localStorage
+        if (!verificationCode) {
+            verificationCode = urlParams.get('verification_code') || null;
         }
 
         let photoCheckInterval;
