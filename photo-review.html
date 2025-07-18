@@ -155,10 +155,9 @@
             <div class="photo-container">
                 <img id="photo-preview" class="photo-preview" alt="Your photo" />
             </div>
-            
             <div class="photo-actions">
                 <button id="keep-btn" class="btn btn-keep">✅ Keep & Send</button>
-                <button id="retake-btn" class="btn btn-retake">🔄 Retake Photo</button>
+                <button id="discard-btn" class="btn btn-retake">🗑️ Discard Photo</button>
             </div>
         </div>
 
@@ -168,6 +167,14 @@
             <div class="success-message">Photo sent successfully!</div>
             <p>Check your messages for your selfie.</p>
             <p>Thanks for using the Selfie Booth!</p>
+            <p>If you want to take another photo, please scan the QR code on the kiosk again.</p>
+        </div>
+
+        <!-- Discard message -->
+        <div id="discard-section" class="success-section">
+            <div class="success-icon">🗑️</div>
+            <div class="success-message">Photo discarded.</div>
+            <p>If you want to take another photo, please scan the QR code on the kiosk again.</p>
         </div>
     </div>
 
@@ -242,42 +249,21 @@
 
         // Button handlers
         document.getElementById('keep-btn').addEventListener('click', function() {
-            // In a real implementation, this would send the photo to the user
-            // For now, just show success
             showSuccess();
         });
 
-        document.getElementById('retake-btn').addEventListener('click', function() {
-            
-            // Signal to kiosk to start new photo session
-            const retakeSignal = {
-                tablet_id: tabletId,
-                action: 'retake',
-                timestamp: Date.now()
-            };
-            
-            localStorage.setItem(`retake_${tabletId}`, JSON.stringify(retakeSignal));
-            console.log(`📱 MOBILE: Stored retake signal: retake_${tabletId}`, retakeSignal);
-            
-            // Go back to waiting
+        document.getElementById('discard-btn').addEventListener('click', function() {
+            // Hide review, show discard message
             document.getElementById('review-section').classList.remove('active');
-            document.getElementById('waiting-section').classList.remove('hidden');
-            
-            // Start checking for new photo
-            startPhotoCheck();
+            document.getElementById('discard-section').classList.add('active');
         });
 
         function showSuccess() {
             const reviewSection = document.getElementById('review-section');
             const successSection = document.getElementById('success-section');
-            
             reviewSection.classList.remove('active');
             successSection.classList.add('active');
-            
-            // Redirect to start after delay
-            setTimeout(() => {
-                window.location.href = `mobile.html?tablet_id=${tabletId}&location=${locationParam}`;
-            }, 5000);
+            // Do not redirect anywhere
         }
 
         // Start the photo check when page loads
