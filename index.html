@@ -630,22 +630,30 @@
             
             // Return to welcome screen after 5 seconds
             setTimeout(async () => {
+                console.log('🔄 KIOSK: 5-second timeout reached, starting session completion');
+                
                 // Hide photo, show video again for next user
                 photoDisplay.style.display = 'none';
                 video.style.display = 'block';
                 
                 // Clear session on server and get session history ID
+                console.log('🔄 KIOSK: About to call clearServerSession');
                 const sessionHistoryId = await this.clearServerSession();
+                console.log('🔄 KIOSK: clearServerSession returned ID:', sessionHistoryId);
                 
                 // Save the image to server if we have a session history ID
                 if (sessionHistoryId && base64Photo) {
+                    console.log('🔄 KIOSK: Saving session image');
                     await this.saveSessionImage(sessionHistoryId, base64Photo);
+                } else {
+                    console.log('🔄 KIOSK: NOT saving image - sessionHistoryId:', sessionHistoryId, 'hasPhoto:', !!base64Photo);
                 }
                 
                 // Reset photo progress flag
                 this.photoInProgress = false;
                 
                 this.showScreen('welcome-screen');
+                console.log('🔄 KIOSK: Session completion finished');
             }, 5000);
         }
         
@@ -688,6 +696,7 @@
         // ============ Session Management ============
         
         async clearServerSession() {
+            console.log('🔄 KIOSK: clearServerSession called for tablet:', this.tabletId);
             try {
                 const response = await fetch('/selfie_booth/api/session_complete', {
                     method: 'POST',
@@ -699,12 +708,17 @@
                     })
                 });
                 
+                console.log('🔄 KIOSK: session_complete response status:', response.status);
+                
                 if (response.ok) {
                     const data = await response.json();
+                    console.log('🔄 KIOSK: session_complete response data:', data);
                     return data.data.session_history_id; // Return the session history ID
+                } else {
+                    console.log('🔄 KIOSK: session_complete failed with status:', response.status);
                 }
             } catch (error) {
-                console.log('Failed to clear server session:', error);
+                console.log('❌ KIOSK: Failed to clear server session:', error);
             }
             return null;
         }
