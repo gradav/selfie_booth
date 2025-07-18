@@ -53,11 +53,9 @@ def load_cumulative_stats():
     try:
         if os.path.exists(STATS_FILE):
             with open(STATS_FILE, 'r') as f:
-                stats = json.load(f)
-                print(f"📊 Loaded cumulative stats: {stats}")
-                return stats
+                return json.load(f)
     except Exception as e:
-        print(f"❌ Error loading stats: {e}")
+        print(f"Error loading stats: {e}")
     
     # Default stats if file doesn't exist or has errors
     return {
@@ -71,9 +69,8 @@ def save_cumulative_stats():
     try:
         with open(STATS_FILE, 'w') as f:
             json.dump(cumulative_stats, f)
-            print(f"💾 Saved cumulative stats: {cumulative_stats}")
     except Exception as e:
-        print(f"❌ Error saving stats: {e}")
+        print(f"Error saving stats: {e}")
 
 # Load existing stats on startup
 cumulative_stats = load_cumulative_stats()
@@ -86,18 +83,15 @@ def ensure_images_dir():
     """Create images directory if it doesn't exist"""
     if not os.path.exists(IMAGES_DIR):
         os.makedirs(IMAGES_DIR)
-        print(f"📁 Created images directory: {IMAGES_DIR}")
 
 def load_session_history():
     """Load session history from file"""
     try:
         if os.path.exists(SESSION_HISTORY_FILE):
             with open(SESSION_HISTORY_FILE, 'r') as f:
-                history = json.load(f)
-                print(f"📋 Loaded {len(history)} historical sessions")
-                return history
+                return json.load(f)
     except Exception as e:
-        print(f"❌ Error loading session history: {e}")
+        print(f"Error loading session history: {e}")
     return []
 
 def save_session_to_history(session_data):
@@ -141,11 +135,10 @@ def save_session_to_history(session_data):
         with open(SESSION_HISTORY_FILE, 'w') as f:
             json.dump(history, f, indent=2)
             
-        print(f"📋 Saved session to history: {session_record['user_name']} (Total: {len(history)})")
         return session_record['id']
         
     except Exception as e:
-        print(f"❌ Error saving session to history: {e}")
+        print(f"Error saving session to history: {e}")
         return None
 
 def save_session_image(session_id, image_data):
@@ -167,8 +160,6 @@ def save_session_image(session_id, image_data):
         with open(filepath, 'wb') as f:
             f.write(image_bytes)
             
-        print(f"📸 Saved session image: {filename} ({len(image_bytes)} bytes)")
-        
         # Update session history with image filename
         history = load_session_history()
         for session in history:
@@ -182,7 +173,7 @@ def save_session_image(session_id, image_data):
         return filename
         
     except Exception as e:
-        print(f"❌ Error saving session image: {e}")
+        print(f"Error saving session image: {e}")
         return None
 
 # Initialize on startup
@@ -271,10 +262,6 @@ def register():
         cumulative_stats['total_sessions_created'] += 1
         save_cumulative_stats()  # Persist to file
         
-        # Debug log
-        print(f"📝 DEBUG: Stored session for {tablet_id}: {data.get('firstName')} - {verification_code}")
-        print(f"📝 DEBUG: Total active sessions: {len(active_sessions)}, Cumulative: {cumulative_stats['total_sessions_created']}")
-        
         return jsonify({
             'success': True,
             'data': {
@@ -330,9 +317,6 @@ def verify():
                 cumulative_stats['total_sessions_verified'] += 1
                 cumulative_stats['total_photos_taken'] += 1  # Assume verified sessions take photos
                 save_cumulative_stats()  # Persist to file
-                
-                print(f"📝 DEBUG: Session verified for {tablet_id}. Cumulative verified: {cumulative_stats['total_sessions_verified']}")
-                print(f"📝 DEBUG: Session saved to history with ID: {session_history_id}")
             
             return jsonify({
                 'success': True,
@@ -402,10 +386,6 @@ def session_complete():
             data = request.form.to_dict()
             
         tablet_id = data.get('tablet_id')
-        
-        print(f"🔄 DEBUG: session_complete called for tablet_id: {tablet_id}")
-        print(f"🔄 DEBUG: Active sessions: {list(active_sessions.keys())}")
-        
         session_history_id = None
         
         if tablet_id and tablet_id in active_sessions:
@@ -415,9 +395,6 @@ def session_complete():
             
             # Remove from active sessions
             del active_sessions[tablet_id]
-            
-            print(f"📝 DEBUG: Session completed for {tablet_id}. Cumulative stats: {cumulative_stats}")
-            print(f"📝 DEBUG: Using existing session history ID: {session_history_id} for {session_data.get('user_name')}")
             
         return jsonify({
             'success': True,
@@ -600,11 +577,6 @@ def retake_photo():
 def admin_stats():
     """Admin statistics endpoint"""
     try:
-        # Debug logging
-        print(f"🔍 DEBUG: Admin stats called. Active sessions count: {len(active_sessions)}")
-        for tablet_id, session in active_sessions.items():
-            print(f"  - {tablet_id}: {session.get('user_name')} ({session.get('state')})")
-        
         # Current active sessions (for reference)
         current_active = len(active_sessions)
         current_pending = sum(1 for session in active_sessions.values() 
@@ -620,15 +592,12 @@ def admin_stats():
             'current_active_sessions': current_active
         }
         
-        print(f"🔍 DEBUG: Returning stats: {stats_data}")
-        
         return jsonify({
             'success': True,
             'data': stats_data
         }), 200
         
     except Exception as e:
-        print(f"❌ ERROR in admin_stats: {e}")
         return jsonify({
             'success': False,
             'error': f'Stats failed: {str(e)}'
@@ -638,8 +607,6 @@ def admin_stats():
 def admin_sessions():
     """Admin sessions list endpoint"""
     try:
-        print(f"🔍 DEBUG: Admin sessions called. Active sessions count: {len(active_sessions)}")
-        
         sessions_list = []
         
         for tablet_id, session_data in active_sessions.items():
@@ -720,8 +687,6 @@ def admin_reset():
             'error': f'Reset failed: {str(e)}'
         }), 500
 
-# ============ Debug Endpoints ============
-
 @app.route('/admin/history')
 def admin_history():
     """Admin session history endpoint"""
@@ -754,62 +719,6 @@ def admin_history():
         return jsonify({
             'success': False,
             'error': f'History retrieval failed: {str(e)}'
-        }), 500
-
-@app.route('/admin/debug')
-def admin_debug():
-    """Debug endpoint to see current state"""
-    return jsonify({
-        'success': True,
-        'data': {
-            'active_sessions_count': len(active_sessions),
-            'active_sessions': dict(active_sessions),  # Convert to regular dict for JSON
-            'cumulative_stats': cumulative_stats,
-            'python_version': sys.version.split()[0],
-            'timestamp': datetime.now().isoformat(),
-            'session_history_available': os.path.exists(SESSION_HISTORY_FILE),
-            'images_dir_exists': os.path.exists(IMAGES_DIR),
-            'new_code_version': '2025-07-17-v2'  # Version marker to confirm new code is loaded
-        }
-    }), 200
-
-@app.route('/admin/test')
-def admin_test():
-    """Simple test endpoint to verify new code is loaded"""
-    return jsonify({
-        'success': True,
-        'message': 'New admin endpoints are working!',
-        'timestamp': datetime.now().isoformat()
-    }), 200
-
-@app.route('/admin/force_save_test')
-def admin_force_save_test():
-    """Test endpoint to manually create a session history entry"""
-    try:
-        test_session = {
-            'tablet_id': 'TEST_TABLET',
-            'session_id': 'test_session_123',
-            'user_name': 'Test User',
-            'phone': '555-123-4567',
-            'email': 'test@example.com',
-            'verification_code': '123456',
-            'timestamp': datetime.now().isoformat(),
-            'state': 'completed'
-        }
-        
-        session_id = save_session_to_history(test_session)
-        
-        return jsonify({
-            'success': True,
-            'message': 'Test session saved to history',
-            'session_id': session_id,
-            'history_file_exists': os.path.exists(SESSION_HISTORY_FILE)
-        }), 200
-        
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': str(e)
         }), 500
 
 # ============ Error Handlers ============

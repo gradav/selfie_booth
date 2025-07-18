@@ -426,7 +426,6 @@
                 const startCountdownDelayed = () => {
                     if (!countdownStarted) {
                         countdownStarted = true;
-                        console.log('📸 KIOSK: Starting photo countdown');
                         setTimeout(() => {
                             this.startAutomaticCapture();
                         }, 2000); // 2 second delay to let user get ready
@@ -466,14 +465,10 @@
             const countdown = document.getElementById('camera-countdown');
             const cameraStatus = document.getElementById('camera-status');
             
-            console.log('📸 KIOSK: startAutomaticCapture called');
-            
             if (!video || !canvas || !countdown) {
-                console.log('❌ KIOSK: Missing camera elements for capture');
                 return;
             }
             
-            console.log('📸 KIOSK: Starting 5-second countdown');
             cameraStatus.textContent = 'Photo will be taken in...';
             
             // Start 5-second countdown
@@ -552,7 +547,6 @@
                         };
                         
                         localStorage.setItem(`photo_${this.tabletId}`, JSON.stringify(photoData));
-                        console.log(`📸 KIOSK: Stored fresh photo: photo_${this.tabletId}`);
                         
                         // Stop camera stream
                         const stream = video.srcObject;
