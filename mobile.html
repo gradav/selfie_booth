@@ -289,9 +289,8 @@
                             return;
                         }
                         
-                        // Kiosk is active and ready
-                        statusDiv.className = 'kiosk-status';
-                        statusText.textContent = `✅ Kiosk ${kioskId} is ready for registration!`;
+                        // Kiosk is active and ready - hide status for good UX
+                        statusDiv.style.display = 'none';
                         kioskValidated = true;
                     }
                 } else {
