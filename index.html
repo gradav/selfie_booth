@@ -421,11 +421,27 @@
                 cameraStatus.textContent = 'Get ready! Photo will be taken automatically...';
                 
                 // Wait for video to be ready, then start automatic countdown
-                video.onloadedmetadata = () => {
-                    setTimeout(() => {
-                        this.startAutomaticCapture();
-                    }, 2000); // 2 second delay to let user get ready
+                let countdownStarted = false;
+                
+                const startCountdownDelayed = () => {
+                    if (!countdownStarted) {
+                        countdownStarted = true;
+                        console.log('📸 KIOSK: Starting photo countdown');
+                        setTimeout(() => {
+                            this.startAutomaticCapture();
+                        }, 2000); // 2 second delay to let user get ready
+                    }
                 };
+                
+                // Primary method: wait for metadata
+                video.onloadedmetadata = startCountdownDelayed;
+                
+                // Fallback method: start after 3 seconds regardless
+                setTimeout(() => {
+                    if (video.readyState >= 1) { // HAVE_METADATA or better
+                        startCountdownDelayed();
+                    }
+                }, 3000);
                 
             } catch (error) {
                 
@@ -450,10 +466,14 @@
             const countdown = document.getElementById('camera-countdown');
             const cameraStatus = document.getElementById('camera-status');
             
+            console.log('📸 KIOSK: startAutomaticCapture called');
+            
             if (!video || !canvas || !countdown) {
+                console.log('❌ KIOSK: Missing camera elements for capture');
                 return;
             }
             
+            console.log('📸 KIOSK: Starting 5-second countdown');
             cameraStatus.textContent = 'Photo will be taken in...';
             
             // Start 5-second countdown
@@ -744,7 +764,16 @@
                     // Check if retake is recent (within 2 minutes)
                     const twoMinutes = 2 * 60 * 1000;
                     if (Date.now() - retakeData.timestamp < twoMinutes) {
-                        // Switch to camera screen for retake
+                        console.log('📸 KIOSK: Processing retake request');
+                        
+                        // Clear any old photo data first
+                        localStorage.removeItem(`photo_${this.tabletId}`);
+                        console.log(`📸 KIOSK: Cleared old photo data: photo_${this.tabletId}`);
+                        
+                        // Reset photo progress flag first
+                        this.photoInProgress = false;
+                        
+                        // Switch to camera screen for retake (this will start proper countdown)
                         this.showScreen('camera-screen');
                         
                         // Clear the retake signal
