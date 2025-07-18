@@ -82,6 +82,33 @@
         </div>
     </div>
 
+    <!-- Offline/Disabled Screen -->
+    <div id="offline-screen" class="screen">
+        <div class="offline-container">
+            <h1>📴 Kiosk Offline</h1>
+            <div class="offline-message">
+                <p>This kiosk has been taken offline by an administrator.</p>
+                <p>The kiosk is currently not accepting new photo sessions.</p>
+            </div>
+            
+            <div class="offline-actions">
+                <button id="reactivate-btn" class="reactivate-btn">
+                    🔄 Reactivate Kiosk
+                </button>
+                <div class="offline-info">
+                    <p>Click the button above to get a new kiosk assignment</p>
+                    <p>Or contact an administrator for assistance</p>
+                </div>
+            </div>
+            
+            <div class="offline-status">
+                <span id="offline-tablet-id">Tablet: UNKNOWN</span><br>
+                <span id="offline-location">Location: unknown</span><br>
+                Status: <span style="color: #FF5722;">Offline</span>
+            </div>
+        </div>
+    </div>
+
     <!-- Enhanced Kiosk JavaScript -->
     <script>
     class SimpleKioskManager {
@@ -97,22 +124,29 @@
             this.currentUserName = null;
             this.photoInProgress = false;
             this.currentVerificationCode = null;
+            this.kioskState = 'initializing'; // 'initializing', 'active', 'offline'
+            this.stateMonitoringInterval = null;
             
             this.init();
         }
         
         async init() {
+            // Setup reactivate button
+            this.setupReactivateButton();
+            
             // First, checkout a kiosk to get our assigned number
-            await this.checkoutKiosk();
+            const success = await this.checkoutKiosk();
             
-            // Update tablet info
-            this.updateTabletInfo();
+            if (success) {
+                this.kioskState = 'active';
+                this.showActiveState();
+            } else {
+                this.kioskState = 'offline';
+                this.showOfflineState();
+            }
             
-            // Generate QR code (wait for DOM to be ready)
-            setTimeout(() => this.generateQRCode(), 100);
-            
-            // Start session monitoring
-            this.startSessionMonitoring();
+            // Start state monitoring
+            this.startStateMonitoring();
         }
         
         // ============ Kiosk Checkout ============
@@ -182,6 +216,80 @@
                 statusElement.textContent = 'Ready';
                 statusElement.style.color = '#4CAF50';
             }
+        }
+
+        // ============ State Management ============
+        
+        showActiveState() {
+            // Update tablet info
+            this.updateTabletInfo();
+            
+            // Generate QR code (wait for DOM to be ready)
+            setTimeout(() => this.generateQRCode(), 100);
+            
+            // Start session monitoring
+            this.startSessionMonitoring();
+            
+            // Show welcome screen
+            this.showScreen('welcome');
+        }
+
+        showOfflineState() {
+            // Update offline screen info
+            const offlineTabletElement = document.getElementById('offline-tablet-id');
+            const offlineLocationElement = document.getElementById('offline-location');
+            
+            if (offlineTabletElement) offlineTabletElement.textContent = `Tablet: ${this.tabletId}`;
+            if (offlineLocationElement) offlineLocationElement.textContent = `Location: ${this.location}`;
+            
+            // Show offline screen
+            this.showScreen('offline');
+        }
+
+        setupReactivateButton() {
+            const reactivateBtn = document.getElementById('reactivate-btn');
+            if (reactivateBtn) {
+                reactivateBtn.addEventListener('click', async () => {
+                    reactivateBtn.disabled = true;
+                    reactivateBtn.textContent = '🔄 Reactivating...';
+                    
+                    const success = await this.checkoutKiosk();
+                    
+                    if (success) {
+                        this.kioskState = 'active';
+                        this.showActiveState();
+                    } else {
+                        reactivateBtn.disabled = false;
+                        reactivateBtn.textContent = '🔄 Reactivate Kiosk';
+                        alert('Failed to reactivate kiosk. No kiosks available.');
+                    }
+                });
+            }
+        }
+
+        startStateMonitoring() {
+            // Check kiosk state every 30 seconds
+            this.stateMonitoringInterval = setInterval(async () => {
+                if (this.kioskState === 'active' && this.kioskId) {
+                    try {
+                        const response = await fetch('/selfie_booth/api/kiosk/status');
+                        if (response.ok) {
+                            const data = await response.json();
+                            if (data.success) {
+                                const kiosk = data.data[this.kioskId];
+                                if (kiosk && kiosk.status !== 'in_use') {
+                                    // Kiosk was released remotely
+                                    console.log(`🔴 Kiosk ${this.kioskId} was released remotely`);
+                                    this.kioskState = 'offline';
+                                    this.showOfflineState();
+                                }
+                            }
+                        }
+                    } catch (error) {
+                        console.error('State monitoring error:', error);
+                    }
+                }
+            }, 30000); // Check every 30 seconds
         }
         
         // ============ QR Code Generation with Caching ============

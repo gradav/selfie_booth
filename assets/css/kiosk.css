@@ -517,3 +517,89 @@ h1 {
         font-size: 1.5em;
     }
 }
+
+/* ============ Offline Screen ============ */
+.offline-container {
+    background: rgba(255, 255, 255, 0.95);
+    padding: 60px 40px;
+    border-radius: 20px;
+    box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+    max-width: 800px;
+    margin: 20px;
+    text-align: center;
+}
+
+.offline-container h1 {
+    color: #FF5722;
+    font-size: 3.5em;
+    margin-bottom: 30px;
+    text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+}
+
+.offline-message {
+    margin-bottom: 40px;
+}
+
+.offline-message p {
+    font-size: 1.4em;
+    color: #666;
+    margin: 15px 0;
+    line-height: 1.6;
+}
+
+.offline-actions {
+    margin: 40px 0;
+}
+
+.reactivate-btn {
+    background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+    color: white;
+    border: none;
+    padding: 20px 40px;
+    font-size: 1.3em;
+    border-radius: 12px;
+    cursor: pointer;
+    margin: 20px;
+    transition: all 0.3s ease;
+    box-shadow: 0 6px 12px rgba(0,0,0,0.2);
+}
+
+.reactivate-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 16px rgba(0,0,0,0.3);
+}
+
+.reactivate-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+.reactivate-btn:disabled {
+    background: #bdc3c7;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
+}
+
+.offline-info {
+    margin-top: 30px;
+}
+
+.offline-info p {
+    font-size: 1.1em;
+    color: #888;
+    margin: 8px 0;
+}
+
+.offline-status {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    background: rgba(0,0,0,0.8);
+    color: white;
+    padding: 15px;
+    border-radius: 8px;
+    font-size: 14px;
+    font-family: monospace;
+    text-align: left;
+}
