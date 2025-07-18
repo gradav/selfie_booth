@@ -384,6 +384,9 @@ def session_complete():
             
         tablet_id = data.get('tablet_id')
         
+        print(f"🔄 DEBUG: session_complete called for tablet_id: {tablet_id}")
+        print(f"🔄 DEBUG: Active sessions: {list(active_sessions.keys())}")
+        
         session_history_id = None
         
         if tablet_id and tablet_id in active_sessions:
@@ -759,6 +762,36 @@ def admin_test():
         'message': 'New admin endpoints are working!',
         'timestamp': datetime.now().isoformat()
     }), 200
+
+@app.route('/admin/force_save_test')
+def admin_force_save_test():
+    """Test endpoint to manually create a session history entry"""
+    try:
+        test_session = {
+            'tablet_id': 'TEST_TABLET',
+            'session_id': 'test_session_123',
+            'user_name': 'Test User',
+            'phone': '555-123-4567',
+            'email': 'test@example.com',
+            'verification_code': '123456',
+            'timestamp': datetime.now().isoformat(),
+            'state': 'completed'
+        }
+        
+        session_id = save_session_to_history(test_session)
+        
+        return jsonify({
+            'success': True,
+            'message': 'Test session saved to history',
+            'session_id': session_id,
+            'history_file_exists': os.path.exists(SESSION_HISTORY_FILE)
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
 
 # ============ Error Handlers ============
 
