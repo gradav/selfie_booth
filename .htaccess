@@ -15,11 +15,8 @@ RewriteEngine On
 
 RewriteEngine On
 
-# Short URL redirects for tablets (use absolute paths)
-RewriteRule ^1/?$ /selfie_booth/mobile.html?tablet_id=TABLET1&location=lobby [R=302,L]
-RewriteRule ^2/?$ /selfie_booth/mobile.html?tablet_id=TABLET2&location=entrance [R=302,L]
-RewriteRule ^3/?$ /selfie_booth/mobile.html?tablet_id=TABLET3&location=event_hall [R=302,L]
-RewriteRule ^4/?$ /selfie_booth/mobile.html?tablet_id=TABLET4&location=party_room [R=302,L]
+# Dynamic kiosk routing - handles /1 through /50 (or higher)
+RewriteRule ^([0-9]+)/?$ /selfie_booth/kiosk.php?kiosk_id=$1 [L]
 
 
 # Legacy URL support

@@ -750,6 +750,238 @@ def admin_history():
             'error': f'History retrieval failed: {str(e)}'
         }), 500
 
+# ============ Kiosk Management API ============
+
+@app.route('/kiosk/status')
+def kiosk_status():
+    """Get status of all kiosks"""
+    try:
+        status = load_kiosk_status()
+        return jsonify({
+            'success': True,
+            'data': status
+        }), 200
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Failed to get kiosk status: {str(e)}'
+        }), 500
+
+@app.route('/kiosk/checkout', methods=['POST', 'OPTIONS'])
+def kiosk_checkout():
+    """Checkout a specific kiosk"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    
+    try:
+        data = request.get_json() or {}
+        kiosk_id = data.get('kiosk_id')
+        
+        if not kiosk_id:
+            return jsonify({
+                'success': False,
+                'error': 'kiosk_id is required'
+            }), 400
+        
+        kiosk_id = int(kiosk_id)
+        if kiosk_id < 1 or kiosk_id > 50:
+            return jsonify({
+                'success': False,
+                'error': 'kiosk_id must be between 1 and 50'
+            }), 400
+        
+        status = load_kiosk_status()
+        session_id = checkout_kiosk(kiosk_id, status)
+        
+        if session_id:
+            save_kiosk_status(status)
+            return jsonify({
+                'success': True,
+                'data': {
+                    'session_id': session_id,
+                    'kiosk_id': kiosk_id,
+                    'status': status[str(kiosk_id)]
+                }
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Kiosk is not available'
+            }), 409
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Checkout failed: {str(e)}'
+        }), 500
+
+@app.route('/kiosk/checkin', methods=['POST', 'OPTIONS'])
+def kiosk_checkin():
+    """Check in / release a kiosk"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    
+    try:
+        data = request.get_json() or {}
+        kiosk_id = data.get('kiosk_id')
+        session_id = data.get('session_id')
+        
+        if not kiosk_id:
+            return jsonify({
+                'success': False,
+                'error': 'kiosk_id is required'
+            }), 400
+        
+        kiosk_id = int(kiosk_id)
+        status = load_kiosk_status()
+        
+        if str(kiosk_id) in status:
+            kiosk = status[str(kiosk_id)]
+            # Verify session_id matches if provided
+            if session_id and kiosk.get('session_id') != session_id:
+                return jsonify({
+                    'success': False,
+                    'error': 'Invalid session_id'
+                }), 403
+            
+            # Release the kiosk
+            kiosk['status'] = 'available'
+            kiosk['assigned_at'] = None
+            kiosk['session_id'] = None
+            
+            save_kiosk_status(status)
+            
+            return jsonify({
+                'success': True,
+                'data': {
+                    'kiosk_id': kiosk_id,
+                    'status': kiosk
+                }
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Kiosk not found'
+            }), 404
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Checkin failed: {str(e)}'
+        }), 500
+
+@app.route('/admin/kiosks')
+def admin_kiosks():
+    """Admin endpoint to view all kiosk statuses"""
+    try:
+        status = load_kiosk_status()
+        cleanup_expired_kiosk_sessions(status)
+        save_kiosk_status(status)
+        
+        return jsonify({
+            'success': True,
+            'data': {
+                'kiosks': status,
+                'summary': {
+                    'total': len(status),
+                    'available': len([k for k in status.values() if k['status'] == 'available']),
+                    'in_use': len([k for k in status.values() if k['status'] == 'in_use']),
+                    'maintenance': len([k for k in status.values() if k['status'] == 'maintenance'])
+                }
+            }
+        }), 200
+        
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': f'Failed to get kiosk admin data: {str(e)}'
+        }), 500
+
+# ============ Kiosk Management Functions ============
+
+def load_kiosk_status():
+    """Load kiosk status from file"""
+    kiosk_file = os.path.join(current_dir, 'kiosk_status.json')
+    
+    if not os.path.exists(kiosk_file):
+        # Initialize with all kiosks available
+        status = {}
+        for i in range(1, 51):
+            status[str(i)] = {
+                'status': 'available',
+                'assigned_at': None,
+                'session_id': None,
+                'location': get_default_location(i)
+            }
+        save_kiosk_status(status)
+        return status
+    
+    try:
+        with open(kiosk_file, 'r') as f:
+            return json.load(f)
+    except Exception as e:
+        print(f"Error loading kiosk status: {e}")
+        return {}
+
+def save_kiosk_status(status):
+    """Save kiosk status to file"""
+    kiosk_file = os.path.join(current_dir, 'kiosk_status.json')
+    
+    try:
+        with open(kiosk_file, 'w') as f:
+            json.dump(status, f, indent=2)
+    except Exception as e:
+        print(f"Error saving kiosk status: {e}")
+
+def get_default_location(kiosk_id):
+    """Get default location for kiosk number"""
+    locations = {
+        1: 'lobby',
+        2: 'entrance', 
+        3: 'event_hall',
+        4: 'party_room'
+    }
+    return locations.get(kiosk_id, f"kiosk_{kiosk_id}")
+
+def is_kiosk_session_expired(assigned_at, timeout_minutes=30):
+    """Check if a kiosk session has expired"""
+    if not assigned_at:
+        return False
+    
+    import time
+    timeout_seconds = timeout_minutes * 60
+    return (time.time() - assigned_at) > timeout_seconds
+
+def cleanup_expired_kiosk_sessions(status):
+    """Clean up expired kiosk sessions"""
+    for kiosk_id, kiosk in status.items():
+        if kiosk['status'] == 'in_use' and is_kiosk_session_expired(kiosk['assigned_at']):
+            kiosk['status'] = 'available'
+            kiosk['assigned_at'] = None
+            kiosk['session_id'] = None
+
+def checkout_kiosk(kiosk_id, status):
+    """Try to checkout a kiosk"""
+    kiosk_key = str(kiosk_id)
+    
+    if kiosk_key not in status:
+        return None
+    
+    kiosk = status[kiosk_key]
+    
+    # Check if available or expired
+    if kiosk['status'] == 'available' or is_kiosk_session_expired(kiosk['assigned_at']):
+        import time
+        session_id = f'session_{kiosk_id}_{int(time.time())}'
+        
+        kiosk['status'] = 'in_use'
+        kiosk['assigned_at'] = time.time()
+        kiosk['session_id'] = session_id
+        
+        return session_id
+    
+    return None
+
 # ============ Error Handlers ============
 
 @app.errorhandler(404)

@@ -113,6 +113,22 @@
             border-left: 4px solid #667eea;
         }
 
+        /* Kiosk Summary */
+        .kiosk-summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .kiosk-summary .stat-card {
+            padding: 20px 15px;
+        }
+
+        .kiosk-summary .stat-number {
+            font-size: 28px;
+        }
+
         .stat-card:hover {
             transform: translateY(-5px);
             box-shadow: 0 8px 25px rgba(0,0,0,0.15);
@@ -442,6 +458,7 @@
             <h1>📸 Selfie Booth Admin Dashboard</h1>
             <div class="header-actions">
                 <button id="refresh-btn" class="btn btn-secondary">🔄 Refresh</button>
+                <button id="kiosk-admin-btn" class="btn btn-primary">🖥️ Kiosk Manager</button>
                 <button id="reset-sessions-btn" class="btn btn-danger">🗑️ Reset All Sessions</button>
             </div>
         </header>
@@ -466,8 +483,47 @@
         </div>
 
         <div class="admin-sections">
+            <!-- Kiosk Status Section -->
+            <section class="admin-section" id="kiosk-section" style="display: none;">
+                <h2>Kiosk Management</h2>
+                <div class="kiosk-summary">
+                    <div class="stat-card">
+                        <div class="stat-number" id="kiosk-available">-</div>
+                        <div class="stat-label">Available</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="kiosk-in-use">-</div>
+                        <div class="stat-label">In Use</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-number" id="kiosk-maintenance">-</div>
+                        <div class="stat-label">Maintenance</div>
+                    </div>
+                </div>
+                <div class="table-container">
+                    <table id="kiosk-table" class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>Kiosk #</th>
+                                <th>Status</th>
+                                <th>Location</th>
+                                <th>Session ID</th>
+                                <th>Assigned</th>
+                                <th>URL</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="kiosk-table-body">
+                            <tr>
+                                <td colspan="7" class="loading">Loading kiosks...</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+
             <!-- Recent Sessions -->
-            <section class="admin-section">
+            <section class="admin-section" id="sessions-section">
                 <h2>Recent Sessions</h2>
                 <div class="table-container">
                     <table id="sessions-table" class="admin-table">
@@ -563,6 +619,7 @@
                 this.refreshFrequency = 30000; // 30 seconds
                 this.isLoading = false;
                 this.modalCallback = null;
+                this.currentView = 'sessions'; // 'sessions' or 'kiosks'
                 
                 this.init();
             }
@@ -580,6 +637,11 @@
                 // Refresh button
                 document.getElementById('refresh-btn').addEventListener('click', () => {
                     this.refreshDashboard();
+                });
+
+                // Kiosk admin button
+                document.getElementById('kiosk-admin-btn').addEventListener('click', () => {
+                    this.toggleView();
                 });
 
                 // Reset sessions button
@@ -632,7 +694,7 @@
                 try {
                     await Promise.all([
                         this.loadStats(),
-                        this.loadSessions(),
+                        this.currentView === 'sessions' ? this.loadSessions() : this.loadKiosks(),
                         this.checkSystemHealth()
                     ]);
                     
@@ -667,6 +729,19 @@
                 } catch (error) {
                     console.error('Sessions loading error:', error);
                     this.showSessionsError();
+                }
+            }
+
+            async loadKiosks() {
+                try {
+                    const response = await this.apiCall('/selfie_booth/api/admin/kiosks');
+                    if (response.success) {
+                        this.displayKiosks(response.data.kiosks || {});
+                        this.updateKioskSummary(response.data.summary || {});
+                    }
+                } catch (error) {
+                    console.error('Kiosks loading error:', error);
+                    this.showKiosksError();
                 }
             }
 
@@ -747,6 +822,57 @@
                 }).join('');
 
                 tbody.innerHTML = rows;
+            }
+
+            displayKiosks(kiosks) {
+                const tbody = document.getElementById('kiosk-table-body');
+                if (!tbody) return;
+
+                if (Object.keys(kiosks).length === 0) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="7" style="text-align: center; color: #666; font-style: italic;">
+                                No kiosks found
+                            </td>
+                        </tr>
+                    `;
+                    return;
+                }
+
+                tbody.innerHTML = Object.entries(kiosks).map(([id, kiosk]) => `
+                    <tr>
+                        <td><strong>${id}</strong></td>
+                        <td>
+                            <span class="status-badge ${kiosk.status}">
+                                ${kiosk.status}
+                            </span>
+                        </td>
+                        <td>${kiosk.location || 'N/A'}</td>
+                        <td>${kiosk.session_id || 'N/A'}</td>
+                        <td>${kiosk.assigned_at ? this.formatTimestamp(new Date(kiosk.assigned_at * 1000)) : 'N/A'}</td>
+                        <td>
+                            <a href="/selfie_booth/${id}" target="_blank" class="link-btn">
+                                /selfie_booth/${id}
+                            </a>
+                        </td>
+                        <td>
+                            ${kiosk.status === 'in_use' ? 
+                                `<button class="action-btn btn-danger" onclick="adminDashboard.releaseKiosk('${id}')">
+                                    Release
+                                </button>` : 
+                                `<button class="action-btn btn-secondary" onclick="adminDashboard.testKiosk('${id}')">
+                                    Test
+                                </button>`
+                            }
+                        </td>
+                    </tr>
+                `).join('');
+            }
+
+            updateKioskSummary(summary) {
+                this.updateStatCard('kiosk-available', summary.available || 0);
+                this.updateStatCard('kiosk-in-use', summary.in_use || 0);
+                this.updateStatCard('kiosk-maintenance', summary.maintenance || 0);
             }
 
             updateLastUpdated() {
@@ -947,6 +1073,19 @@
                 }
             }
 
+            showKiosksError() {
+                const tbody = document.getElementById('kiosk-table-body');
+                if (tbody) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="7" style="text-align: center; color: #e74c3c;">
+                                ❌ Failed to load kiosks
+                            </td>
+                        </tr>
+                    `;
+                }
+            }
+
             // ============ Utility Methods ============
 
             async apiCall(url, method = 'GET', data = null) {
@@ -991,6 +1130,47 @@
                 const div = document.createElement('div');
                 div.textContent = text;
                 return div.innerHTML;
+            }
+            // ============ View Management ============
+            
+            toggleView() {
+                if (this.currentView === 'sessions') {
+                    this.currentView = 'kiosks';
+                    document.getElementById('sessions-section').style.display = 'none';
+                    document.getElementById('kiosk-section').style.display = 'block';
+                    document.getElementById('kiosk-admin-btn').textContent = '📋 Sessions';
+                    this.loadKiosks();
+                } else {
+                    this.currentView = 'sessions';
+                    document.getElementById('sessions-section').style.display = 'block';
+                    document.getElementById('kiosk-section').style.display = 'none';
+                    document.getElementById('kiosk-admin-btn').textContent = '🖥️ Kiosk Manager';
+                    this.loadSessions();
+                }
+            }
+
+            // ============ Kiosk Management Actions ============
+            
+            async releaseKiosk(kioskId) {
+                try {
+                    const response = await this.apiCall('/selfie_booth/api/kiosk/checkin', 'POST', {
+                        kiosk_id: kioskId
+                    });
+                    
+                    if (response.success) {
+                        alert(`Kiosk ${kioskId} released successfully`);
+                        this.loadKiosks();
+                    } else {
+                        throw new Error(response.error);
+                    }
+                } catch (error) {
+                    console.error('Release kiosk error:', error);
+                    alert('Failed to release kiosk');
+                }
+            }
+
+            async testKiosk(kioskId) {
+                window.open(`/selfie_booth/${kioskId}`, '_blank');
             }
         }
 
