@@ -308,12 +308,17 @@ def verify():
                 active_sessions[tablet_id]['state'] = 'photo_session'
                 active_sessions[tablet_id]['verified_at'] = datetime.now().isoformat()
                 
+                # Save session to history immediately upon verification
+                session_history_id = save_session_to_history(active_sessions[tablet_id])
+                active_sessions[tablet_id]['session_history_id'] = session_history_id  # Store for later image saving
+                
                 # Increment cumulative counters
                 cumulative_stats['total_sessions_verified'] += 1
                 cumulative_stats['total_photos_taken'] += 1  # Assume verified sessions take photos
                 save_cumulative_stats()  # Persist to file
                 
                 print(f"📝 DEBUG: Session verified for {tablet_id}. Cumulative verified: {cumulative_stats['total_sessions_verified']}")
+                print(f"📝 DEBUG: Session saved to history with ID: {session_history_id}")
             
             return jsonify({
                 'success': True,
@@ -390,15 +395,15 @@ def session_complete():
         session_history_id = None
         
         if tablet_id and tablet_id in active_sessions:
-            # Save session to permanent history before removing
+            # Get the existing session history ID (already saved during verification)
             session_data = active_sessions[tablet_id]
-            session_history_id = save_session_to_history(session_data)
+            session_history_id = session_data.get('session_history_id')
             
             # Remove from active sessions
             del active_sessions[tablet_id]
             
             print(f"📝 DEBUG: Session completed for {tablet_id}. Cumulative stats: {cumulative_stats}")
-            print(f"📝 DEBUG: Saved session to history: {session_data.get('user_name')} ({session_data.get('state')})")
+            print(f"📝 DEBUG: Using existing session history ID: {session_history_id} for {session_data.get('user_name')}")
             
         return jsonify({
             'success': True,
