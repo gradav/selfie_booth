@@ -355,7 +355,7 @@
         async tryServerQRCode(qrElement) {
             try {
                 // Try to get QR code from your API
-                const response = await fetch(`/api/qr_code?url=${encodeURIComponent(this.mobileUrl)}&size=200`);
+                const response = await fetch(`/selfie_booth/api/qr_code?url=${encodeURIComponent(this.mobileUrl)}&size=200`);
                 
                 if (response.ok) {
                     const blob = await response.blob();
