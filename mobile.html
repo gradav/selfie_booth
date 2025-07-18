@@ -33,6 +33,29 @@
             font-size: 28px;
         }
 
+        .kiosk-status {
+            background: #e8f5e8;
+            border: 2px solid #4CAF50;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-weight: bold;
+            color: #2e7d32;
+        }
+
+        .kiosk-status.warning {
+            background: #fff3cd;
+            border-color: #ffc107;
+            color: #856404;
+        }
+
+        .kiosk-status.error {
+            background: #ffeaea;
+            border-color: #e74c3c;
+            color: #721c24;
+        }
+
         .form-group {
             margin-bottom: 20px;
         }
@@ -175,6 +198,11 @@
     <div class="container">
         <h1>📸 Selfie Booth</h1>
         
+        <!-- Kiosk Status Display -->
+        <div id="kiosk-status" class="kiosk-status" style="display: none;">
+            <span id="kiosk-status-text">Checking kiosk availability...</span>
+        </div>
+        
         <form id="registration-form">
             <div class="form-group">
                 <label for="firstName">First Name *</label>
@@ -210,9 +238,81 @@
     </div>
 
     <script>
-        // Simple form handler
+        let kioskValidated = false;
+        let kioskId = null;
+        let tabletId = null;
+        let location = null;
+
+        // Check kiosk status on page load
+        document.addEventListener('DOMContentLoaded', async function() {
+            await validateKioskStatus();
+        });
+
+        async function validateKioskStatus() {
+            const urlParams = new URLSearchParams(window.location.search);
+            kioskId = urlParams.get('kiosk_id');
+            tabletId = urlParams.get('tablet_id') || 'UNKNOWN';
+            location = urlParams.get('location') || 'unknown';
+
+            const statusDiv = document.getElementById('kiosk-status');
+            const statusText = document.getElementById('kiosk-status-text');
+            const submitBtn = document.getElementById('submit-btn');
+
+            if (!kioskId) {
+                // No specific kiosk ID, proceed normally
+                kioskValidated = true;
+                return;
+            }
+
+            statusDiv.style.display = 'block';
+            statusText.textContent = `Checking kiosk ${kioskId} availability...`;
+
+            try {
+                const response = await fetch('/selfie_booth/api/kiosk/status');
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success) {
+                        const kiosk = data.data[kioskId];
+                        
+                        if (!kiosk) {
+                            statusDiv.className = 'kiosk-status error';
+                            statusText.textContent = `❌ Kiosk ${kioskId} does not exist.`;
+                            submitBtn.disabled = true;
+                            return;
+                        }
+                        
+                        if (kiosk.status !== 'in_use') {
+                            statusDiv.className = 'kiosk-status warning';
+                            statusText.textContent = `⚠️ Kiosk ${kioskId} is not currently active. Please scan the QR code from the kiosk display.`;
+                            submitBtn.disabled = true;
+                            return;
+                        }
+                        
+                        // Kiosk is active and ready
+                        statusDiv.className = 'kiosk-status';
+                        statusText.textContent = `✅ Kiosk ${kioskId} is ready for registration!`;
+                        kioskValidated = true;
+                    }
+                } else {
+                    throw new Error('Failed to check kiosk status');
+                }
+            } catch (error) {
+                console.warn('Could not verify kiosk status:', error);
+                statusDiv.className = 'kiosk-status warning';
+                statusText.textContent = '⚠️ Could not verify kiosk status. Proceeding anyway...';
+                kioskValidated = true; // Allow registration if API is down
+            }
+        }
+
+        // Form submission handler
         document.getElementById('registration-form').addEventListener('submit', async function(e) {
             e.preventDefault();
+            
+            if (!kioskValidated) {
+                showError('Please wait for kiosk validation to complete');
+                return;
+            }
             
             // Get form values
             const firstName = document.getElementById('firstName').value.trim();
@@ -220,17 +320,32 @@
             const email = document.getElementById('email').value.trim();
             const consent = document.getElementById('consent').checked;
             
-            // Simple validation
+            // Enhanced validation
             if (!firstName) {
                 showError('Please enter your first name');
+                document.getElementById('firstName').focus();
+                return;
+            }
+            if (firstName.length < 2) {
+                showError('First name must be at least 2 characters');
+                document.getElementById('firstName').focus();
                 return;
             }
             if (!phone) {
                 showError('Please enter your phone number');
+                document.getElementById('phone').focus();
+                return;
+            }
+            // Basic phone validation
+            const phoneRegex = /^\(?([0-9]{3})\)?[-. ]?([0-9]{3})[-. ]?([0-9]{4})$/;
+            if (!phoneRegex.test(phone.replace(/\D/g, ''))) {
+                showError('Please enter a valid 10-digit phone number');
+                document.getElementById('phone').focus();
                 return;
             }
             if (!consent) {
                 showError('Please agree to receive your photo via text');
+                document.getElementById('consent').focus();
                 return;
             }
             
@@ -239,41 +354,7 @@
             document.getElementById('submit-btn').disabled = true;
             
             try {
-                // Get URL parameters
-                const urlParams = new URLSearchParams(window.location.search);
-                const tabletId = urlParams.get('tablet_id') || 'UNKNOWN';
-                const location = urlParams.get('location') || 'unknown';
-                const kioskId = urlParams.get('kiosk_id');
-                
-                // If kiosk_id is provided, verify it's available (but don't checkout)
-                if (kioskId) {
-                    const statusResponse = await fetch('/selfie_booth/api/kiosk/status');
-                    
-                    if (statusResponse.ok) {
-                        const statusData = await statusResponse.json();
-                        if (statusData.success) {
-                            const kiosks = statusData.data;
-                            const targetKiosk = kiosks[kioskId];
-                            
-                            if (!targetKiosk) {
-                                showError(`Kiosk ${kioskId} does not exist.`);
-                                return;
-                            }
-                            
-                            if (targetKiosk.status !== 'in_use') {
-                                showError(`Kiosk ${kioskId} is not currently active. Please scan the QR code from the kiosk display.`);
-                                return;
-                            }
-                            
-                            // Kiosk is active and ready for mobile registration
-                        }
-                    } else {
-                        console.warn('Could not verify kiosk status, proceeding anyway');
-                    }
-                }
-                
                 // Submit to API
-                
                 const response = await fetch('/selfie_booth/api/register', {
                     method: 'POST',
                     headers: {
@@ -290,11 +371,16 @@
                 });
                 
                 if (!response.ok) {
-                    const errorText = await response.text();
-                    throw new Error(`Registration failed: ${response.status} ${response.statusText}`);
+                    const errorData = await response.json().catch(() => null);
+                    const errorMessage = errorData?.error || `Registration failed: ${response.status} ${response.statusText}`;
+                    throw new Error(errorMessage);
                 }
                 
                 const data = await response.json();
+                
+                if (!data.success) {
+                    throw new Error(data.error || 'Registration failed');
+                }
                 
                 // Store session data in localStorage for kiosk to pick up
                 const sessionData = {
@@ -312,11 +398,12 @@
                 
                 // Redirect after showing success message
                 setTimeout(() => {
-                    window.location.href = `verify-new.html?tablet_id=${tabletId}&location=${location}`;
+                    window.location.href = `verify-new.html?tablet_id=${tabletId}&location=${location}&verification_code=${data.data.verification_code}`;
                 }, 2000);
                 
             } catch (error) {
-                showError('Registration failed. Please try again.');
+                console.error('Registration error:', error);
+                showError(error.message || 'Registration failed. Please try again.');
             } finally {
                 document.getElementById('loading-overlay').classList.remove('active');
                 document.getElementById('submit-btn').disabled = false;
@@ -330,6 +417,11 @@
             successDiv.style.display = 'none';
             errorDiv.textContent = message;
             errorDiv.style.display = 'block';
+            
+            // Auto-hide after 10 seconds
+            setTimeout(() => {
+                errorDiv.style.display = 'none';
+            }, 10000);
         }
         
         function showSuccess(message) {
