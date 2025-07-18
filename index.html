@@ -179,7 +179,6 @@
                         this.location = data.data.status.location;
                         this.mobileUrl = `${window.location.origin}/selfie_booth/${this.kioskId}`;
                         
-                        console.log(`✅ Checked out kiosk ${this.kioskId}`);
                         return true;
                     }
                 }
@@ -200,7 +199,6 @@
                     statusElement.style.color = '#FF5722';
                 }
                 
-                console.warn(`⚠️ Using fallback kiosk ${this.kioskId}`);
                 return false;
             }
         }
@@ -279,8 +277,7 @@
                                 const kiosk = data.data[this.kioskId];
                                 if (kiosk && kiosk.status !== 'in_use') {
                                     // Kiosk was released remotely
-                                    console.log(`🔴 Kiosk ${this.kioskId} was released remotely`);
-                                    this.kioskState = 'offline';
+                                                    this.kioskState = 'offline';
                                     this.showOfflineState();
                                 }
                             }
@@ -759,7 +756,6 @@
                     };
                     
                     localStorage.setItem(`photo_${this.tabletId}_${verificationCode}`, JSON.stringify(photoData));
-                    console.log(`📸 KIOSK: Stored fresh photo: photo_${this.tabletId}`);
                     
                     // Stop camera stream
                     const stream = video.srcObject;
@@ -796,30 +792,24 @@
             
             // Return to welcome screen after 5 seconds
             setTimeout(async () => {
-                console.log('🔄 KIOSK: 5-second timeout reached, starting session completion');
                 
                 // Hide photo, show video again for next user
                 photoDisplay.style.display = 'none';
                 video.style.display = 'block';
                 
                 // Clear session on server and get session history ID
-                console.log('🔄 KIOSK: About to call clearServerSession');
                 const sessionHistoryId = await this.clearServerSession();
-                console.log('🔄 KIOSK: clearServerSession returned ID:', sessionHistoryId);
                 
                 // Save the image to server if we have a session history ID
                 if (sessionHistoryId && base64Photo) {
-                    console.log('🔄 KIOSK: Saving session image');
                     await this.saveSessionImage(sessionHistoryId, base64Photo);
                 } else {
-                    console.log('🔄 KIOSK: NOT saving image - sessionHistoryId:', sessionHistoryId, 'hasPhoto:', !!base64Photo);
                 }
                 
                 // Reset photo progress flag
                 this.photoInProgress = false;
                 
                 this.showScreen('welcome-screen');
-                console.log('🔄 KIOSK: Session completion finished');
             }, 5000);
         }
         
@@ -865,7 +855,6 @@
         // ============ Session Management ============
         
         async clearServerSession() {
-            console.log('🔄 KIOSK: clearServerSession called for tablet:', this.tabletId);
             try {
                 const response = await fetch('/selfie_booth/api/session_complete', {
                     method: 'POST',
@@ -877,17 +866,13 @@
                     })
                 });
                 
-                console.log('🔄 KIOSK: session_complete response status:', response.status);
                 
                 if (response.ok) {
                     const data = await response.json();
-                    console.log('🔄 KIOSK: session_complete response data:', data);
                     return data.data.session_history_id; // Return the session history ID
                 } else {
-                    console.log('🔄 KIOSK: session_complete failed with status:', response.status);
                 }
             } catch (error) {
-                console.log('❌ KIOSK: Failed to clear server session:', error);
             }
             return null;
         }
@@ -904,7 +889,6 @@
                         image_data: imageData
                     })
                 });
-                console.log('📸 KIOSK: Session image saved to server');
             } catch (error) {
                 console.log('Failed to save session image:', error);
             }
@@ -924,10 +908,8 @@
             
             keysToRemove.forEach(key => {
                 localStorage.removeItem(key);
-                console.log(`🧹 Cleared localStorage: ${key}`);
             });
             
-            console.log(`🧹 Cleared ${keysToRemove.length} localStorage items`);
         }
         
         // ============ Improved Session Monitoring ============
@@ -956,18 +938,15 @@
         }
         
         async checkSessionState() {
-            console.log(`🔍 Checking session state for tablet: ${this.tabletId}`);
             
             // Skip session checking if we're in camera mode or photo in progress to prevent cycling
             if (this.currentScreen === 'camera' || this.photoInProgress) {
-                console.log('📷 Skipping session check - camera active or photo in progress');
                 return;
             }
             
             // Check localStorage for retake signal first
             const retakeKey = `retake_${this.tabletId}`;
             const retakeSignal = localStorage.getItem(retakeKey);
-            console.log(`📸 Retake signal check: ${retakeKey} = ${retakeSignal ? 'FOUND' : 'NOT FOUND'}`);
             
             if (retakeSignal) {
                 try {
@@ -976,11 +955,9 @@
                     // Check if retake is recent (within 2 minutes)
                     const twoMinutes = 2 * 60 * 1000;
                     if (Date.now() - retakeData.timestamp < twoMinutes) {
-                        console.log('📸 KIOSK: Processing retake request');
                         
                         // Clear any old photo data first
                         localStorage.removeItem(`photo_${this.tabletId}`);
-                        console.log(`📸 KIOSK: Cleared old photo data: photo_${this.tabletId}`);
                         
                         // Reset photo progress flag first
                         this.photoInProgress = false;
@@ -1003,7 +980,6 @@
             // Check localStorage for verification complete signal
             const verificationKey = `verification_${this.tabletId}`;
             const verificationComplete = localStorage.getItem(verificationKey);
-            console.log(`📱 Verification signal check: ${verificationKey} = ${verificationComplete ? 'FOUND' : 'NOT FOUND'}`);
             
             if (verificationComplete) {
                 try {
@@ -1030,7 +1006,6 @@
             // Check localStorage for new session data first
             const sessionKey = `session_${this.tabletId}`;
             const storedSession = localStorage.getItem(sessionKey);
-            console.log(`📋 Session signal check: ${sessionKey} = ${storedSession ? 'FOUND' : 'NOT FOUND'}`);
             
             if (storedSession) {
                 try {
@@ -1099,7 +1074,6 @@
         // Add keyboard shortcut for clearing localStorage (Ctrl+Shift+C)
         document.addEventListener('keydown', function(e) {
             if (e.ctrlKey && e.shiftKey && e.key === 'C') {
-                console.log('🧹 Manual localStorage clear triggered');
                 window.kioskManager.clearAllLocalStorage();
             }
         });

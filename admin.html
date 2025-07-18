@@ -934,7 +934,7 @@
             }
 
             async viewSession(sessionId) {
-                alert(`Session ID: ${sessionId}\\n\\nDetailed view not yet implemented.`);
+                // TODO: Implement detailed session view
             }
 
             async deleteSession(sessionId) {
@@ -944,7 +944,7 @@
                     async () => {
                         try {
                             // Note: This would need a deleteSession API endpoint
-                            alert('Session deleted (not implemented)');
+                            // TODO: Implement session deletion
                             await this.loadDashboardData();
                         } catch (error) {
                             alert('Failed to delete session');

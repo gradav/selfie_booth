@@ -266,7 +266,6 @@
                             }
                             
                             // Kiosk is active and ready for mobile registration
-                            console.log(`✅ Connecting to active kiosk ${kioskId}`);
                         }
                     } else {
                         console.warn('Could not verify kiosk status, proceeding anyway');
@@ -307,7 +306,6 @@
                 };
                 
                 localStorage.setItem(`session_${tabletId}`, JSON.stringify(sessionData));
-                console.log(`📱 MOBILE: Stored session data: session_${tabletId}`, sessionData);
                 
                 // Show success
                 showSuccess('Registration successful! Look at the kiosk screen for your verification code.');

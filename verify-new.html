@@ -237,7 +237,6 @@
                         timestamp: Date.now()
                     };
                     localStorage.setItem(`verification_${tabletId}`, JSON.stringify(verificationComplete));
-                    console.log(`📱 MOBILE: Stored verification signal: verification_${tabletId}`, verificationComplete);
                     
                     // Redirect to photo review page, passing verification code in URL
                     setTimeout(() => {

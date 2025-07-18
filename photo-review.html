@@ -212,7 +212,6 @@
 
         function checkForPhoto() {
             if (!verificationCode) {
-                console.log('No verification code found in session data.');
                 return;
             }
             // Poll the backend for the photo
@@ -226,11 +225,9 @@
                         // Photo not ready yet, keep waiting
                     } else {
                         // Error or not found
-                        console.log('Photo check error:', data.error || data.message);
                     }
                 })
                 .catch(err => {
-                    console.log('Photo check fetch error:', err);
                 });
         }
 
