@@ -571,6 +571,34 @@ def retake_photo():
         'error': 'Retake photo not yet implemented'
     }), 501
 
+@app.route('/get_image')
+def get_image():
+    """Return the photo for a given tablet_id and verification_code if available"""
+    tablet_id = request.args.get('tablet_id')
+    verification_code = request.args.get('verification_code')
+    if not tablet_id or not verification_code:
+        return jsonify({'success': False, 'error': 'tablet_id and verification_code required'}), 400
+
+    # Find the session in history
+    history = load_session_history()
+    session = None
+    for s in history:
+        if s.get('tablet_id') == tablet_id and s.get('verification_code') == verification_code:
+            session = s
+            break
+    if not session:
+        return jsonify({'success': False, 'ready': False, 'error': 'Session not found'}), 404
+    image_filename = session.get('image_filename')
+    if not image_filename:
+        return jsonify({'success': True, 'ready': False, 'message': 'Photo not ready yet'}), 200
+    image_path = os.path.join(IMAGES_DIR, image_filename)
+    if not os.path.exists(image_path):
+        return jsonify({'success': False, 'ready': False, 'error': 'Image file missing'}), 404
+    with open(image_path, 'rb') as f:
+        image_bytes = f.read()
+        image_b64 = base64.b64encode(image_bytes).decode('utf-8')
+    return jsonify({'success': True, 'ready': True, 'image_data': f'data:image/jpeg;base64,{image_b64}'}), 200
+
 # ============ Admin Endpoints (Placeholders) ============
 
 @app.route('/admin/stats')

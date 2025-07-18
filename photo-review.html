@@ -204,33 +204,23 @@
                 console.log('No verification code found in session data.');
                 return;
             }
-            const photoKey = `photo_${tabletId}_${verificationCode}`;
-            const storedPhoto = localStorage.getItem(photoKey);
-            console.log(`📱 MOBILE: Checking for photo: ${photoKey} = ${storedPhoto ? 'FOUND' : 'NOT FOUND'}`);
-            
-            if (storedPhoto) {
-                try {
-                    const photoData = JSON.parse(storedPhoto);
-                    
-                    // Check if photo is recent (within 5 minutes)
-                    const fiveMinutes = 5 * 60 * 1000;
-                    if (Date.now() - photoData.timestamp < fiveMinutes) {
-                        showPhotoReview(photoData.photo);
-                        
-                        // Clear the photo data so it doesn't show again
-                        localStorage.removeItem(photoKey);
-                        
-                        // Stop checking
+            // Poll the backend for the photo
+            fetch(`/selfie_booth/api/get_image?tablet_id=${encodeURIComponent(tabletId)}&verification_code=${encodeURIComponent(verificationCode)}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success && data.ready && data.image_data) {
+                        showPhotoReview(data.image_data);
                         clearInterval(photoCheckInterval);
-                        return;
+                    } else if (data.success && !data.ready) {
+                        // Photo not ready yet, keep waiting
                     } else {
-                        // Photo is old, remove it
-                        localStorage.removeItem(photoKey);
+                        // Error or not found
+                        console.log('Photo check error:', data.error || data.message);
                     }
-                } catch (error) {
-                    localStorage.removeItem(photoKey);
-                }
-            }
+                })
+                .catch(err => {
+                    console.log('Photo check fetch error:', err);
+                });
         }
 
         function showPhotoReview(photoBase64) {
