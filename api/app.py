@@ -777,20 +777,24 @@ def kiosk_checkout():
         data = request.get_json() or {}
         kiosk_id = data.get('kiosk_id')
         
-        if not kiosk_id:
-            return jsonify({
-                'success': False,
-                'error': 'kiosk_id is required'
-            }), 400
-        
-        kiosk_id = int(kiosk_id)
-        if kiosk_id < 1 or kiosk_id > 50:
-            return jsonify({
-                'success': False,
-                'error': 'kiosk_id must be between 1 and 50'
-            }), 400
-        
         status = load_kiosk_status()
+        
+        # If no kiosk_id provided, find the next available one
+        if not kiosk_id:
+            kiosk_id = find_next_available_kiosk(status)
+            if not kiosk_id:
+                return jsonify({
+                    'success': False,
+                    'error': 'No kiosks available'
+                }), 409
+        else:
+            kiosk_id = int(kiosk_id)
+            if kiosk_id < 1 or kiosk_id > 50:
+                return jsonify({
+                    'success': False,
+                    'error': 'kiosk_id must be between 1 and 50'
+                }), 400
+        
         session_id = checkout_kiosk(kiosk_id, status)
         
         if session_id:
@@ -959,6 +963,21 @@ def cleanup_expired_kiosk_sessions(status):
             kiosk['status'] = 'available'
             kiosk['assigned_at'] = None
             kiosk['session_id'] = None
+
+def find_next_available_kiosk(status):
+    """Find the next available kiosk number"""
+    # Clean up expired sessions first
+    cleanup_expired_kiosk_sessions(status)
+    
+    # Find the first available kiosk
+    for i in range(1, 51):
+        kiosk_key = str(i)
+        if kiosk_key in status:
+            kiosk = status[kiosk_key]
+            if kiosk['status'] == 'available':
+                return i
+    
+    return None
 
 def checkout_kiosk(kiosk_id, status):
     """Try to checkout a kiosk"""

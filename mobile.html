@@ -245,27 +245,31 @@
                 const location = urlParams.get('location') || 'unknown';
                 const kioskId = urlParams.get('kiosk_id');
                 
-                // If kiosk_id is provided, try to checkout the kiosk first
+                // If kiosk_id is provided, verify it's available (but don't checkout)
                 if (kioskId) {
-                    const checkoutResponse = await fetch('/selfie_booth/api/kiosk/checkout', {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            kiosk_id: kioskId
-                        })
-                    });
+                    const statusResponse = await fetch('/selfie_booth/api/kiosk/status');
                     
-                    if (!checkoutResponse.ok) {
-                        const errorData = await checkoutResponse.json();
-                        if (checkoutResponse.status === 409) {
-                            // Kiosk is in use, show error
-                            showError(`Kiosk ${kioskId} is currently in use. Please try a different number or wait a few minutes.`);
-                            return;
-                        } else {
-                            throw new Error(`Kiosk checkout failed: ${errorData.error || 'Unknown error'}`);
+                    if (statusResponse.ok) {
+                        const statusData = await statusResponse.json();
+                        if (statusData.success) {
+                            const kiosks = statusData.data;
+                            const targetKiosk = kiosks[kioskId];
+                            
+                            if (!targetKiosk) {
+                                showError(`Kiosk ${kioskId} does not exist.`);
+                                return;
+                            }
+                            
+                            if (targetKiosk.status !== 'in_use') {
+                                showError(`Kiosk ${kioskId} is not currently active. Please scan the QR code from the kiosk display.`);
+                                return;
+                            }
+                            
+                            // Kiosk is active and ready for mobile registration
+                            console.log(`✅ Connecting to active kiosk ${kioskId}`);
                         }
+                    } else {
+                        console.warn('Could not verify kiosk status, proceeding anyway');
                     }
                 }
                 

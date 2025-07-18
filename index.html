@@ -86,22 +86,25 @@
     <script>
     class SimpleKioskManager {
         constructor() {
-            // Get tablet_id and location from URL parameters or use defaults
-            const urlParams = new URLSearchParams(window.location.search);
-            this.tabletId = urlParams.get('tablet_id') || 'TABLET1';
-            this.location = urlParams.get('location') || 'lobby';
-            this.mobileUrl = `${window.location.origin}/selfie_booth/mobile.html?tablet_id=${this.tabletId}&location=${this.location}`;
+            // Initialize with default values - will be updated after kiosk checkout
+            this.tabletId = 'TABLET_UNKNOWN';
+            this.location = 'unknown';
+            this.kioskId = null;
+            this.kioskSessionId = null;
+            this.mobileUrl = '';
             this.currentScreen = 'welcome';
             this.sessionMonitoringInterval = null;
             this.currentUserName = null;
             this.photoInProgress = false;
-            this.currentVerificationCode = null; // Added for photo storage
-            
+            this.currentVerificationCode = null;
             
             this.init();
         }
         
-        init() {
+        async init() {
+            // First, checkout a kiosk to get our assigned number
+            await this.checkoutKiosk();
+            
             // Update tablet info
             this.updateTabletInfo();
             
@@ -112,6 +115,62 @@
             this.startSessionMonitoring();
         }
         
+        // ============ Kiosk Checkout ============
+        
+        async checkoutKiosk() {
+            const statusElement = document.getElementById('status');
+            if (statusElement) {
+                statusElement.textContent = 'Getting kiosk number...';
+                statusElement.style.color = '#FF9800';
+            }
+            
+            try {
+                // Try to checkout the next available kiosk
+                const response = await fetch('/selfie_booth/api/kiosk/checkout', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        // We'll let the server assign us any available kiosk
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success) {
+                        this.kioskId = data.data.kiosk_id;
+                        this.kioskSessionId = data.data.session_id;
+                        this.tabletId = `TABLET${this.kioskId}`;
+                        this.location = data.data.status.location;
+                        this.mobileUrl = `${window.location.origin}/selfie_booth/${this.kioskId}`;
+                        
+                        console.log(`✅ Checked out kiosk ${this.kioskId}`);
+                        return true;
+                    }
+                }
+                
+                throw new Error('Failed to checkout kiosk');
+                
+            } catch (error) {
+                console.error('Kiosk checkout failed:', error);
+                
+                // Fallback to manual assignment
+                this.kioskId = Math.floor(Math.random() * 50) + 1;
+                this.tabletId = `TABLET${this.kioskId}`;
+                this.location = `kiosk_${this.kioskId}`;
+                this.mobileUrl = `${window.location.origin}/selfie_booth/${this.kioskId}`;
+                
+                if (statusElement) {
+                    statusElement.textContent = 'Using fallback kiosk assignment';
+                    statusElement.style.color = '#FF5722';
+                }
+                
+                console.warn(`⚠️ Using fallback kiosk ${this.kioskId}`);
+                return false;
+            }
+        }
+
         updateTabletInfo() {
             const tabletElement = document.getElementById('tablet-id');
             const locationElement = document.getElementById('location');
