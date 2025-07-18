@@ -10,7 +10,7 @@ import json
 import base64
 from datetime import datetime
 from io import BytesIO
-from flask import redirect, request
+from flask import redirect, request, url_for
 
 # Add current directory to path
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -758,9 +758,9 @@ def kiosk_short_url(kiosk_number):
             return 'Invalid kiosk number', 404
     except ValueError:
         return 'Invalid kiosk number', 404
-    # Build the absolute redirect URL
-    base_url = request.url_root.rstrip('/')
-    target = f'{base_url}/selfie_booth/mobile.html?tablet_id=KIOSK{num}&location=lobby'
+    # Use url_for to generate the correct absolute URL for the static file
+    target = url_for('static', filename='selfie_booth/mobile.html', _external=True)
+    target += f'?tablet_id=KIOSK{num}&location=lobby'
     return redirect(target)
 
 # ============ Error Handlers ============
