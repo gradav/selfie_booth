@@ -231,7 +231,7 @@
             this.startSessionMonitoring();
             
             // Show welcome screen
-            this.showScreen('welcome');
+            this.showScreen('welcome-screen');
         }
 
         showOfflineState() {
@@ -243,7 +243,7 @@
             if (offlineLocationElement) offlineLocationElement.textContent = `Location: ${this.location}`;
             
             // Show offline screen
-            this.showScreen('offline');
+            this.showScreen('offline-screen');
         }
 
         setupReactivateButton() {
@@ -486,7 +486,7 @@
         // ============ Screen Management ============
         
         showScreen(screenName) {
-            const screens = ['welcome-screen', 'verification-screen', 'camera-screen'];
+            const screens = ['welcome-screen', 'verification-screen', 'camera-screen', 'offline-screen'];
             screens.forEach(screenId => {
                 const screen = document.getElementById(screenId);
                 if (screen) screen.classList.remove('active');
