@@ -750,32 +750,6 @@ def admin_history():
             'error': f'History retrieval failed: {str(e)}'
         }), 500
 
-@app.route('/selfie_booth/<kiosk_number>')
-def kiosk_short_url(kiosk_number):
-    try:
-        num = int(kiosk_number)
-        if not (1 <= num <= 50):
-            return 'Invalid kiosk number', 404
-    except ValueError:
-        return 'Invalid kiosk number', 404
-    # Manually build the absolute URL
-    scheme = request.scheme
-    host = request.host
-    target = f'{scheme}://{host}/selfie_booth/mobile.html?tablet_id=KIOSK{num}&location=lobby'
-    return redirect(target)
-
-@app.route('/test_env')
-def test_env():
-    return f"""
-    SCHEME: {request.scheme}<br>
-    HOST: {request.host}<br>
-    PATH: {request.path}<br>
-    URL_ROOT: {request.url_root}<br>
-    FULL_PATH: {request.full_path}<br>
-    BASE_URL: {request.base_url}<br>
-    SCRIPT_ROOT: {request.script_root}<br>
-    """
-
 # ============ Error Handlers ============
 
 @app.errorhandler(404)
