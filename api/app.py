@@ -43,6 +43,13 @@ app.config['DEBUG'] = False
 # In-memory session storage (for simple cross-device communication)
 active_sessions = {}
 
+# Cumulative counters for admin dashboard (persist across session clears)
+cumulative_stats = {
+    'total_sessions_created': 0,
+    'total_sessions_verified': 0,
+    'total_photos_taken': 0
+}
+
 # ============ Core API Endpoints ============
 
 @app.route('/')
@@ -122,9 +129,12 @@ def register():
             'timestamp': datetime.now().isoformat()
         }
         
+        # Increment cumulative counter
+        cumulative_stats['total_sessions_created'] += 1
+        
         # Debug log
         print(f"📝 DEBUG: Stored session for {tablet_id}: {data.get('firstName')} - {verification_code}")
-        print(f"📝 DEBUG: Total active sessions: {len(active_sessions)}")
+        print(f"📝 DEBUG: Total active sessions: {len(active_sessions)}, Cumulative: {cumulative_stats['total_sessions_created']}")
         
         return jsonify({
             'success': True,
@@ -169,6 +179,12 @@ def verify():
                 # Update session state to verified
                 active_sessions[tablet_id]['state'] = 'photo_session'
                 active_sessions[tablet_id]['verified_at'] = datetime.now().isoformat()
+                
+                # Increment cumulative counters
+                cumulative_stats['total_sessions_verified'] += 1
+                cumulative_stats['total_photos_taken'] += 1  # Assume verified sessions take photos
+                
+                print(f"📝 DEBUG: Session verified for {tablet_id}. Cumulative verified: {cumulative_stats['total_sessions_verified']}")
             
             return jsonify({
                 'success': True,
@@ -384,17 +400,19 @@ def admin_stats():
         for tablet_id, session in active_sessions.items():
             print(f"  - {tablet_id}: {session.get('user_name')} ({session.get('state')})")
         
-        total_sessions = len(active_sessions)
-        verified_sessions = sum(1 for session in active_sessions.values() 
-                               if session.get('state') == 'photo_session' or session.get('verified_at'))
-        pending_sessions = sum(1 for session in active_sessions.values() 
-                              if session.get('state') == 'verification_needed')
+        # Current active sessions (for reference)
+        current_active = len(active_sessions)
+        current_pending = sum(1 for session in active_sessions.values() 
+                             if session.get('state') == 'verification_needed')
         
+        # Return cumulative stats (historical totals)
         stats_data = {
-            'total_sessions': total_sessions,
-            'verified_sessions': verified_sessions,
-            'pending_sessions': pending_sessions,
-            'photos_taken': verified_sessions  # Approximate - verified sessions likely took photos
+            'total_sessions': cumulative_stats['total_sessions_created'],
+            'verified_sessions': cumulative_stats['total_sessions_verified'],
+            'pending_sessions': current_pending,  # Only current pending makes sense
+            'photos_taken': cumulative_stats['total_photos_taken'],
+            # Include current active for admin reference
+            'current_active_sessions': current_active
         }
         
         print(f"🔍 DEBUG: Returning stats: {stats_data}")
@@ -459,17 +477,34 @@ def admin_sessions():
 def admin_reset():
     """Admin reset sessions endpoint"""
     try:
+        # Get reset type from request (optional)
+        reset_type = 'sessions'  # Default: only reset active sessions
+        if request.is_json:
+            data = request.get_json() or {}
+            reset_type = data.get('type', 'sessions')  # 'sessions' or 'all'
+        
         # Count current sessions before clearing
         deleted_count = len(active_sessions)
         
-        # Clear all active sessions
+        # Always clear active sessions
         active_sessions.clear()
+        
+        message = f'Successfully reset {deleted_count} active sessions'
+        
+        # Optionally reset cumulative stats
+        if reset_type == 'all':
+            old_totals = cumulative_stats.copy()
+            cumulative_stats['total_sessions_created'] = 0
+            cumulative_stats['total_sessions_verified'] = 0
+            cumulative_stats['total_photos_taken'] = 0
+            message += f' and cumulative stats (was {old_totals["total_sessions_created"]} total sessions)'
         
         return jsonify({
             'success': True,
             'data': {
                 'deleted_count': deleted_count,
-                'message': f'Successfully reset {deleted_count} sessions'
+                'reset_type': reset_type,
+                'message': message
             }
         }), 200
         
@@ -489,6 +524,7 @@ def admin_debug():
         'data': {
             'active_sessions_count': len(active_sessions),
             'active_sessions': dict(active_sessions),  # Convert to regular dict for JSON
+            'cumulative_stats': cumulative_stats,
             'python_version': sys.version.split()[0],
             'timestamp': datetime.now().isoformat()
         }
