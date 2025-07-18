@@ -764,6 +764,18 @@ def kiosk_short_url(kiosk_number):
     target = f'{scheme}://{host}/selfie_booth/mobile.html?tablet_id=KIOSK{num}&location=lobby'
     return redirect(target)
 
+@app.route('/test_env')
+def test_env():
+    return f"""
+    SCHEME: {request.scheme}<br>
+    HOST: {request.host}<br>
+    PATH: {request.path}<br>
+    URL_ROOT: {request.url_root}<br>
+    FULL_PATH: {request.full_path}<br>
+    BASE_URL: {request.base_url}<br>
+    SCRIPT_ROOT: {request.script_root}<br>
+    """
+
 # ============ Error Handlers ============
 
 @app.errorhandler(404)
