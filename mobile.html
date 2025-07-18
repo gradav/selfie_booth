@@ -243,6 +243,31 @@
                 const urlParams = new URLSearchParams(window.location.search);
                 const tabletId = urlParams.get('tablet_id') || 'UNKNOWN';
                 const location = urlParams.get('location') || 'unknown';
+                const kioskId = urlParams.get('kiosk_id');
+                
+                // If kiosk_id is provided, try to checkout the kiosk first
+                if (kioskId) {
+                    const checkoutResponse = await fetch('/selfie_booth/api/kiosk/checkout', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            kiosk_id: kioskId
+                        })
+                    });
+                    
+                    if (!checkoutResponse.ok) {
+                        const errorData = await checkoutResponse.json();
+                        if (checkoutResponse.status === 409) {
+                            // Kiosk is in use, show error
+                            showError(`Kiosk ${kioskId} is currently in use. Please try a different number or wait a few minutes.`);
+                            return;
+                        } else {
+                            throw new Error(`Kiosk checkout failed: ${errorData.error || 'Unknown error'}`);
+                        }
+                    }
+                }
                 
                 // Submit to API
                 

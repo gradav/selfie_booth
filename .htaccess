@@ -15,8 +15,9 @@ RewriteEngine On
 
 RewriteEngine On
 
-# Dynamic kiosk routing - handles /1 through /50 (or higher)
-RewriteRule ^([0-9]+)/?$ /selfie_booth/kiosk.php?kiosk_id=$1 [L]
+# Dynamic kiosk routing - redirect to mobile.html with dynamic tablet assignment
+# This avoids ModSecurity issues by using direct redirects instead of PHP
+RewriteRule ^([0-9]+)/?$ /selfie_booth/mobile.html?tablet_id=TABLET$1&location=kiosk_$1&kiosk_id=$1 [R=302,L]
 
 
 # Legacy URL support
