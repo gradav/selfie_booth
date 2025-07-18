@@ -177,6 +177,18 @@
         const tabletId = urlParams.get('tablet_id') || 'TABLET1';
         const locationParam = urlParams.get('location') || 'lobby';
 
+        // Get verification code from session data in localStorage
+        let verificationCode = null;
+        const sessionKey = `session_${tabletId}`;
+        const sessionDataRaw = localStorage.getItem(sessionKey);
+        if (sessionDataRaw) {
+            try {
+                const sessionData = JSON.parse(sessionDataRaw);
+                verificationCode = sessionData.verification_code;
+            } catch (e) {
+                verificationCode = null;
+            }
+        }
 
         let photoCheckInterval;
 
@@ -188,7 +200,11 @@
         }
 
         function checkForPhoto() {
-            const photoKey = `photo_${tabletId}`;
+            if (!verificationCode) {
+                console.log('No verification code found in session data.');
+                return;
+            }
+            const photoKey = `photo_${tabletId}_${verificationCode}`;
             const storedPhoto = localStorage.getItem(photoKey);
             console.log(`📱 MOBILE: Checking for photo: ${photoKey} = ${storedPhoto ? 'FOUND' : 'NOT FOUND'}`);
             

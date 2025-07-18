@@ -95,6 +95,7 @@
             this.sessionMonitoringInterval = null;
             this.currentUserName = null;
             this.photoInProgress = false;
+            this.currentVerificationCode = null; // Added for photo storage
             
             
             this.init();
@@ -540,13 +541,15 @@
                         localStorage.removeItem(`photo_${this.tabletId}`);
                         
                         // Store photo for mobile review
+                        const verificationCode = this.currentVerificationCode;
                         const photoData = {
                             tablet_id: this.tabletId,
+                            verification_code: verificationCode,
                             photo: base64Photo,
                             timestamp: Date.now()
                         };
                         
-                        localStorage.setItem(`photo_${this.tabletId}`, JSON.stringify(photoData));
+                        localStorage.setItem(`photo_${this.tabletId}_${verificationCode}`, JSON.stringify(photoData));
                         
                         // Stop camera stream
                         const stream = video.srcObject;
@@ -580,13 +583,15 @@
                     localStorage.removeItem(`photo_${this.tabletId}`);
                     
                     // Store photo for mobile review
+                    const verificationCode = this.currentVerificationCode;
                     const photoData = {
                         tablet_id: this.tabletId,
+                        verification_code: verificationCode,
                         photo: base64Photo,
                         timestamp: Date.now()
                     };
                     
-                    localStorage.setItem(`photo_${this.tabletId}`, JSON.stringify(photoData));
+                    localStorage.setItem(`photo_${this.tabletId}_${verificationCode}`, JSON.stringify(photoData));
                     console.log(`📸 KIOSK: Stored fresh photo: photo_${this.tabletId}`);
                     
                     // Stop camera stream
@@ -654,13 +659,16 @@
         showVerificationCode(code, userName = 'User') {
             const codeElement = document.getElementById('verification-code');
             const greetingElement = document.getElementById('user-greeting');
-            
             if (codeElement) codeElement.textContent = code;
             if (greetingElement) greetingElement.textContent = `Hi ${userName}!`;
-            
-            // Store user name for later use
             this.currentUserName = userName;
-            
+            this.currentVerificationCode = code;
+            // Clear old photos for this tablet except for the current code
+            Object.keys(localStorage).forEach(key => {
+                if (key.startsWith(`photo_${this.tabletId}_`) && !key.endsWith(`_${code}`)) {
+                    localStorage.removeItem(key);
+                }
+            });
             this.showScreen('verification-screen');
             this.startCountdown(120);
         }
