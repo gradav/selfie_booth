@@ -758,9 +758,10 @@ def kiosk_short_url(kiosk_number):
             return 'Invalid kiosk number', 404
     except ValueError:
         return 'Invalid kiosk number', 404
-    # Use url_for to generate the correct absolute URL for the static file
-    target = url_for('static', filename='selfie_booth/mobile.html', _external=True)
-    target += f'?tablet_id=KIOSK{num}&location=lobby'
+    # Manually build the absolute URL
+    scheme = request.scheme
+    host = request.host
+    target = f'{scheme}://{host}/selfie_booth/mobile.html?tablet_id=KIOSK{num}&location=lobby'
     return redirect(target)
 
 # ============ Error Handlers ============
