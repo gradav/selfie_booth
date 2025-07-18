@@ -744,8 +744,20 @@ def admin_debug():
             'active_sessions': dict(active_sessions),  # Convert to regular dict for JSON
             'cumulative_stats': cumulative_stats,
             'python_version': sys.version.split()[0],
-            'timestamp': datetime.now().isoformat()
+            'timestamp': datetime.now().isoformat(),
+            'session_history_available': os.path.exists(SESSION_HISTORY_FILE),
+            'images_dir_exists': os.path.exists(IMAGES_DIR),
+            'new_code_version': '2025-07-17-v2'  # Version marker to confirm new code is loaded
         }
+    }), 200
+
+@app.route('/admin/test')
+def admin_test():
+    """Simple test endpoint to verify new code is loaded"""
+    return jsonify({
+        'success': True,
+        'message': 'New admin endpoints are working!',
+        'timestamp': datetime.now().isoformat()
     }), 200
 
 # ============ Error Handlers ============
