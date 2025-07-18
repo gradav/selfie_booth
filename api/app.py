@@ -105,16 +105,27 @@ def save_session_to_history(session_data):
     try:
         history = load_session_history()
         
-        # Add timestamp and unique ID
+        # Add timestamp and unique ID - need to pass tablet_id separately since it's not in session_data
+        tablet_id = session_data.get('tablet_id')  # This might be None
+        if not tablet_id:
+            # tablet_id not in session_data, need to find it from active_sessions
+            for tid, sess in active_sessions.items():
+                if sess.get('session_id') == session_data.get('session_id'):
+                    tablet_id = tid
+                    break
+        
+        if not tablet_id:
+            tablet_id = 'UNKNOWN'  # Fallback
+        
         session_record = {
-            'id': f"{session_data['tablet_id']}_{int(datetime.now().timestamp())}",
-            'tablet_id': session_data['tablet_id'],
-            'session_id': session_data['session_id'],
-            'user_name': session_data['user_name'],
-            'phone': session_data['phone'],
+            'id': f"{tablet_id}_{int(datetime.now().timestamp())}",
+            'tablet_id': tablet_id,
+            'session_id': session_data.get('session_id', ''),
+            'user_name': session_data.get('user_name', ''),
+            'phone': session_data.get('phone', ''),
             'email': session_data.get('email', ''),
-            'verification_code': session_data['verification_code'],
-            'created_at': session_data['timestamp'],
+            'verification_code': session_data.get('verification_code', ''),
+            'created_at': session_data.get('timestamp', ''),
             'verified_at': session_data.get('verified_at', ''),
             'completed_at': datetime.now().isoformat(),
             'state': session_data.get('state', 'completed'),
@@ -309,7 +320,10 @@ def verify():
                 active_sessions[tablet_id]['verified_at'] = datetime.now().isoformat()
                 
                 # Save session to history immediately upon verification
-                session_history_id = save_session_to_history(active_sessions[tablet_id])
+                # Add tablet_id to session data before saving
+                session_with_tablet_id = active_sessions[tablet_id].copy()
+                session_with_tablet_id['tablet_id'] = tablet_id
+                session_history_id = save_session_to_history(session_with_tablet_id)
                 active_sessions[tablet_id]['session_history_id'] = session_history_id  # Store for later image saving
                 
                 # Increment cumulative counters
