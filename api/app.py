@@ -206,23 +206,24 @@ ensure_images_dir()
 
 # ============ Authentication Middleware ============
 
-@app.before_request
-def check_auth():
-    """Check authentication for protected pages"""
-    # Admin pages require admin login
-    if request.path == '/selfie_booth/admin.html':
-        if not is_admin_logged_in():
-            return redirect('/selfie_booth/api/admin/login')
-    
-    # Kiosk pages require kiosk login  
-    elif request.path == '/selfie_booth/index.html':
-        if not is_kiosk_logged_in():
-            return redirect('/selfie_booth/api/kiosk/login')
-    
-    # Admin API endpoints require admin login
-    elif request.path.startswith('/selfie_booth/api/admin/') and not request.path.endswith('/login'):
-        if not is_admin_logged_in():
-            return jsonify({'success': False, 'error': 'Admin authentication required'}), 401
+# Temporarily disabled to test if this is causing 502 errors
+# @app.before_request
+# def check_auth():
+#     """Check authentication for protected pages"""
+#     # Admin pages require admin login
+#     if request.path == '/selfie_booth/admin.html':
+#         if not is_admin_logged_in():
+#             return redirect('/selfie_booth/api/admin/login')
+#     
+#     # Kiosk pages require kiosk login  
+#     elif request.path == '/selfie_booth/index.html':
+#         if not is_kiosk_logged_in():
+#             return redirect('/selfie_booth/api/kiosk/login')
+#     
+#     # Admin API endpoints require admin login
+#     elif request.path.startswith('/selfie_booth/api/admin/') and not request.path.endswith('/login'):
+#         if not is_admin_logged_in():
+#             return jsonify({'success': False, 'error': 'Admin authentication required'}), 401
 
 # ============ Core API Endpoints ============
 
