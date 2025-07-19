@@ -18,31 +18,46 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, current_dir)
 
 try:
-    from flask import Flask, jsonify, request, send_file, Response
+    from flask import Flask, jsonify, request, send_file, Response, send_from_directory
     from flask_cors import CORS
     FLASK_CORS_AVAILABLE = True
 except ImportError:
-    from flask import Flask, jsonify, request, send_file, Response
+    from flask import Flask, jsonify, request, send_file, Response, send_from_directory
     FLASK_CORS_AVAILABLE = False
 
 # Create Flask application instance
 app = Flask(__name__)
 
-# Enable CORS
+# Enable CORS with security restrictions
+ALLOWED_ORIGINS = os.environ.get('ALLOWED_ORIGINS', 'https://lockhartlovesyou.com').split(',')
+
 if FLASK_CORS_AVAILABLE:
-    CORS(app, origins=['*'])
+    CORS(app, origins=ALLOWED_ORIGINS, supports_credentials=True)
 else:
-    # Manual CORS headers
+    # Manual CORS headers with security
     @app.after_request
     def after_request(response):
-        response.headers.add('Access-Control-Allow-Origin', '*')
+        origin = request.headers.get('Origin')
+        if origin in ALLOWED_ORIGINS:
+            response.headers.add('Access-Control-Allow-Origin', origin)
         response.headers.add('Access-Control-Allow-Headers', 'Content-Type,Authorization')
         response.headers.add('Access-Control-Allow-Methods', 'GET,PUT,POST,DELETE,OPTIONS')
+        response.headers.add('Access-Control-Allow-Credentials', 'true')
+        
+        # Add security headers
+        response.headers.add('X-Content-Type-Options', 'nosniff')
+        response.headers.add('X-Frame-Options', 'DENY')
+        response.headers.add('X-XSS-Protection', '1; mode=block')
+        response.headers.add('Strict-Transport-Security', 'max-age=31536000; includeSubDomains')
+        
         return response
 
-# Basic configuration
-app.config['SECRET_KEY'] = 'selfie-booth-secret-key-change-in-production'
+# Basic configuration - Use environment variable for secret key
+app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'selfie-booth-secret-key-change-in-production')
 app.config['DEBUG'] = False
+app.config['SESSION_COOKIE_SECURE'] = True  # Require HTTPS for cookies
+app.config['SESSION_COOKIE_HTTPONLY'] = True  # Prevent XSS access to cookies
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # CSRF protection
 
 # Session timeout 
 ADMIN_SESSION_TIMEOUT = 7200
@@ -215,19 +230,13 @@ ensure_images_dir()
 @app.before_request
 def check_auth():
     """Check authentication for protected pages"""
-    # Skip auth for login endpoints
-    if request.path.endswith('/login'):
+    # Skip auth for login endpoints and health check
+    if request.path.endswith('/login') or request.path.endswith('/health'):
         return
     
-    # Admin pages require admin login
-    if request.path == '/selfie_booth/admin.html':
-        if not is_admin_logged_in():
-            return redirect('/selfie_booth/api/admin/login')
-    
-    # Kiosk pages require kiosk login  
-    elif request.path == '/selfie_booth/index.html':
-        if not is_kiosk_logged_in():
-            return redirect('/selfie_booth/api/kiosk/login')
+    # Skip auth for API endpoints that have their own auth checks
+    if request.path.startswith('/selfie_booth/api/') and not request.path.startswith('/selfie_booth/api/admin/') and not request.path.startswith('/selfie_booth/api/kiosk/'):
+        return
 
 # ============ Logout Endpoints ============
 
@@ -244,7 +253,55 @@ def kiosk_logout():
     session.pop('kiosk', None)
     return redirect('/selfie_booth/api/kiosk/login')
 
-# ============ Page Routes ============
+# ============ Secure Static Page Routes ============
+
+@app.route('/selfie_booth/admin.html')
+def serve_admin_page():
+    """Serve admin page with authentication"""
+    if not is_admin_logged_in():
+        return redirect('/selfie_booth/api/admin/login')
+    
+    # Read and serve the admin.html file
+    admin_file_path = os.path.join(os.path.dirname(current_dir), 'admin.html')
+    try:
+        with open(admin_file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        return Response(content, mimetype='text/html')
+    except FileNotFoundError:
+        return jsonify({'error': 'Admin page not found'}), 404
+
+@app.route('/selfie_booth/index.html')
+@app.route('/selfie_booth/')
+def serve_kiosk_page():
+    """Serve kiosk page with authentication"""
+    if not is_kiosk_logged_in():
+        return redirect('/selfie_booth/api/kiosk/login')
+    
+    # Read and serve the index.html file
+    kiosk_file_path = os.path.join(os.path.dirname(current_dir), 'index.html')
+    try:
+        with open(kiosk_file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        return Response(content, mimetype='text/html')
+    except FileNotFoundError:
+        return jsonify({'error': 'Kiosk page not found'}), 404
+
+@app.route('/selfie_booth/mobile.html')
+def serve_mobile_page():
+    """Serve mobile page - accessible without authentication for user registration"""
+    mobile_file_path = os.path.join(os.path.dirname(current_dir), 'mobile.html')
+    try:
+        with open(mobile_file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        return Response(content, mimetype='text/html')
+    except FileNotFoundError:
+        return jsonify({'error': 'Mobile page not found'}), 404
+
+@app.route('/selfie_booth/assets/<path:filename>')
+def serve_assets(filename):
+    """Serve assets (CSS/JS) - needed for all pages"""
+    assets_dir = os.path.join(os.path.dirname(current_dir), 'assets')
+    return send_from_directory(assets_dir, filename)
 
 # Add authentication check endpoint for JavaScript
 @app.route('/auth/check')
@@ -320,10 +377,11 @@ def register():
                 'error': 'Phone number is required'
             }), 400
         
-        # Generate session data
+        # Generate session data with cryptographically secure random
         import secrets
         session_id = secrets.token_urlsafe(16)
-        verification_code = str(secrets.randbelow(900000) + 100000)
+        # Generate more secure verification code (still 6 digits but cryptographically random)
+        verification_code = f"{secrets.randbelow(900000) + 100000:06d}"
         
         # Store session in server memory
         tablet_id = data.get('tablet_id', 'UNKNOWN')
@@ -915,6 +973,21 @@ def kiosk_checkout():
     
     if not is_kiosk_logged_in():
         return jsonify({'success': False, 'error': 'Kiosk authentication required'}), 401
+    
+    # Add rate limiting to prevent abuse
+    client_ip = request.environ.get('HTTP_X_FORWARDED_FOR', request.remote_addr)
+    rate_limit_key = f"kiosk_checkout_{client_ip}"
+    
+    # Simple rate limiting (could be enhanced with Redis)
+    import time
+    last_checkout = session.get('last_kiosk_checkout', 0)
+    if time.time() - last_checkout < 5:  # 5 second cooldown
+        return jsonify({
+            'success': False,
+            'error': 'Please wait 5 seconds between kiosk checkout attempts'
+        }), 429
+    
+    session['last_kiosk_checkout'] = time.time()
     
     try:
         data = request.get_json() or {}

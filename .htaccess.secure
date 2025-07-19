@@ -1,0 +1,50 @@
+# SECURE .htaccess for Selfie Booth
+# This replaces the existing .htaccess with security-focused rules
+
+# Enable URL rewriting
+RewriteEngine On
+
+# ============ SECURITY: Block Direct Access to Static HTML ============
+# Redirect all HTML files to Flask for authentication
+RewriteRule ^admin\.html$ /selfie_booth/api/admin.html [R=301,L]
+RewriteRule ^index\.html$ /selfie_booth/api/kiosk.html [R=301,L] 
+RewriteRule ^mobile\.html$ /selfie_booth/api/mobile.html [R=301,L]
+
+# Block direct access to sensitive files
+RewriteRule \.(env|log|py|pyc|pyo|ini|conf|bak|json)$ - [F,L]
+
+# ============ Dynamic Kiosk Routing ============
+# Route numbered URLs to mobile registration with kiosk assignment
+RewriteRule ^([0-9]+)/?$ /selfie_booth/mobile.html?tablet_id=TABLET$1&location=kiosk_$1&kiosk_id=$1 [R=302,L]
+
+# ============ Legacy URL Support ============
+RewriteRule ^mobile/?$ /selfie_booth/mobile.html [R=301,L]
+RewriteRule ^admin/?$ /selfie_booth/admin.html [R=301,L]
+
+# Default route - require authentication
+RewriteRule ^/?$ /selfie_booth/index.html [R=301,L]
+
+# ============ Security Headers ============
+<IfModule mod_headers.c>
+    # Prevent clickjacking
+    Header always append X-Frame-Options DENY
+    
+    # Prevent MIME type sniffing
+    Header always append X-Content-Type-Options nosniff
+    
+    # XSS protection
+    Header always append X-XSS-Protection "1; mode=block"
+    
+    # Force HTTPS (if using SSL)
+    Header always append Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+    
+    # Content Security Policy
+    Header always append Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'"
+</IfModule>
+
+# ============ Rate Limiting (if mod_throttle available) ============
+<IfModule mod_throttle.c>
+    ThrottlePolicy speed 60 600
+    ThrottlePolicy daily 1000 86400
+    ThrottleClientsList throttle.lst
+</IfModule>
