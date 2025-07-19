@@ -322,6 +322,28 @@ def serve_mobile_page():
     except FileNotFoundError:
         return jsonify({'error': 'Mobile page not found'}), 404
 
+@app.route('/verify_new_secure')
+def serve_verify_new_page():
+    """Serve verification page - accessible without authentication for user workflow"""
+    verify_file_path = os.path.join(os.path.dirname(current_dir), 'verify-new.html')
+    try:
+        with open(verify_file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        return Response(content, mimetype='text/html')
+    except FileNotFoundError:
+        return jsonify({'error': 'Verify page not found'}), 404
+
+@app.route('/photo_review_secure')
+def serve_photo_review_page():
+    """Serve photo review page - accessible without authentication for user workflow"""
+    photo_file_path = os.path.join(os.path.dirname(current_dir), 'photo-review.html')
+    try:
+        with open(photo_file_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        return Response(content, mimetype='text/html')
+    except FileNotFoundError:
+        return jsonify({'error': 'Photo review page not found'}), 404
+
 @app.route('/assets/<path:filename>')
 def serve_assets(filename):
     """Serve assets (CSS/JS) - needed for all pages"""
