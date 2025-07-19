@@ -261,14 +261,18 @@ def serve_admin_page():
     if not is_admin_logged_in():
         return redirect('/selfie_booth/api/admin/login')
     
-    # Read and serve the admin.html file
-    admin_file_path = os.path.join(os.path.dirname(current_dir), 'admin.html')
+    # Read and serve the admin.html file - look for the backup we just created
+    admin_file_path = os.path.join(os.path.dirname(current_dir), 'admin.html.backup')
+    if not os.path.exists(admin_file_path):
+        # Fallback to original location
+        admin_file_path = os.path.join(os.path.dirname(current_dir), 'admin.html')
+    
     try:
         with open(admin_file_path, 'r', encoding='utf-8') as f:
             content = f.read()
         return Response(content, mimetype='text/html')
     except FileNotFoundError:
-        return jsonify({'error': 'Admin page not found'}), 404
+        return jsonify({'error': 'Admin page not found', 'tried_path': admin_file_path}), 404
 
 @app.route('/kiosk_secure')
 def serve_kiosk_page():
@@ -301,6 +305,23 @@ def serve_assets(filename):
     """Serve assets (CSS/JS) - needed for all pages"""
     assets_dir = os.path.join(os.path.dirname(current_dir), 'assets')
     return send_from_directory(assets_dir, filename)
+
+@app.route('/debug_routes')
+def debug_routes():
+    """Debug endpoint to see what routes are available"""
+    routes = []
+    for rule in app.url_map.iter_rules():
+        routes.append({
+            'endpoint': rule.endpoint,
+            'methods': list(rule.methods),
+            'rule': str(rule)
+        })
+    return jsonify({
+        'success': True,
+        'routes': routes,
+        'current_dir': current_dir,
+        'parent_dir': os.path.dirname(current_dir)
+    })
 
 # Add authentication check endpoint for JavaScript
 @app.route('/auth/check')
