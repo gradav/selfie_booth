@@ -685,6 +685,9 @@ button{{width:100%;padding:15px;background:#667eea;color:white;border:none;borde
 @app.route('/admin/stats')
 def admin_stats():
     """Admin statistics endpoint"""
+    if not is_admin_logged_in():
+        return jsonify({'success': False, 'error': 'Admin authentication required'}), 401
+    
     try:
         # Current active sessions (for reference)
         current_active = len(active_sessions)
@@ -715,6 +718,9 @@ def admin_stats():
 @app.route('/admin/sessions')
 def admin_sessions():
     """Admin sessions list endpoint"""
+    if not is_admin_logged_in():
+        return jsonify({'success': False, 'error': 'Admin authentication required'}), 401
+    
     try:
         sessions_list = []
         
@@ -757,6 +763,9 @@ def admin_sessions():
 @app.route('/admin/reset', methods=['POST'])
 def admin_reset():
     """Admin reset sessions endpoint"""
+    if not is_admin_logged_in():
+        return jsonify({'success': False, 'error': 'Admin authentication required'}), 401
+    
     try:
         # Get reset type from request (optional)
         reset_type = 'sessions'  # Default: only reset active sessions
@@ -799,6 +808,9 @@ def admin_reset():
 @app.route('/admin/history')
 def admin_history():
     """Admin session history endpoint"""
+    if not is_admin_logged_in():
+        return jsonify({'success': False, 'error': 'Admin authentication required'}), 401
+    
     try:
         history = load_session_history()
         
@@ -957,6 +969,9 @@ def kiosk_checkin():
 @app.route('/admin/kiosks')
 def admin_kiosks():
     """Admin endpoint to view all kiosk statuses"""
+    if not is_admin_logged_in():
+        return jsonify({'success': False, 'error': 'Admin authentication required'}), 401
+    
     try:
         status = load_kiosk_status()
         cleanup_expired_kiosk_sessions(status)
