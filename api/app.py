@@ -928,6 +928,9 @@ def kiosk_checkout():
     if request.method == 'OPTIONS':
         return '', 200
     
+    if not is_kiosk_logged_in():
+        return jsonify({'success': False, 'error': 'Kiosk authentication required'}), 401
+    
     try:
         data = request.get_json() or {}
         kiosk_id = data.get('kiosk_id')
