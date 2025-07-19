@@ -236,13 +236,13 @@ def admin_logout():
     """Admin logout"""
     session.pop('admin', None)
     session.pop('admin_login_time', None)
-    return redirect('/selfie_booth/api/admin/login')
+    return redirect('/selfie_booth/admin/login')
 
 @app.route('/kiosk/logout', methods=['GET', 'POST'])
 def kiosk_logout():
     """Kiosk logout"""
     session.pop('kiosk', None)
-    return redirect('/selfie_booth/api/kiosk/login')
+    return redirect('/selfie_booth/kiosk/login')
 
 # ============ Page Routes ============
 
@@ -730,7 +730,7 @@ button{{width:100%;padding:15px;background:#667eea;color:white;border:none;borde
         session.permanent = True
         return redirect('/selfie_booth/admin.html')
     else:
-        return redirect('/selfie_booth/api/admin/login?error=Invalid')
+        return redirect('/selfie_booth/admin/login?error=Invalid')
 
 @app.route('/kiosk/login', methods=['GET', 'POST'])
 def kiosk_login():
@@ -754,7 +754,7 @@ button{{width:100%;padding:15px;background:#667eea;color:white;border:none;borde
         session.permanent = True
         return redirect('/selfie_booth/index.html')
     else:
-        return redirect('/selfie_booth/api/kiosk/login?error=Invalid')
+        return redirect('/selfie_booth/kiosk/login?error=Invalid')
 
 # ============ Admin Endpoints (Placeholders) ============
 
