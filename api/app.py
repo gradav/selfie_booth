@@ -10,8 +10,7 @@ import json
 import base64
 from datetime import datetime
 from io import BytesIO
-from flask import redirect, request, url_for, session
-import time
+from flask import redirect, request, url_for
 
 # Add current directory to path
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -43,29 +42,6 @@ else:
 # Basic configuration
 app.config['SECRET_KEY'] = 'selfie-booth-secret-key-change-in-production'
 app.config['DEBUG'] = False
-
-# Session timeout
-ADMIN_SESSION_TIMEOUT = 7200
-
-# Environment variables for auth
-ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
-KIOSK_USERNAME = os.environ.get('KIOSK_USERNAME', 'kiosk')
-KIOSK_PASSWORD = os.environ.get('KIOSK_PASSWORD', 'kiosk123')
-
-def is_admin_logged_in():
-    """Check if admin is logged in and session hasn't expired"""
-    if not session.get('admin'):
-        return False
-    login_time = session.get('admin_login_time', 0)
-    if time.time() - login_time > ADMIN_SESSION_TIMEOUT:
-        session.pop('admin', None)
-        session.pop('admin_login_time', None)
-        return False
-    return True
-
-def is_kiosk_logged_in():
-    """Check if kiosk is logged in"""
-    return session.get('kiosk') is not None
 
 # In-memory session storage (for simple cross-device communication)
 active_sessions = {}
@@ -203,26 +179,6 @@ def save_session_image(session_id, image_data):
 
 # Initialize on startup
 ensure_images_dir()
-
-# ============ Authentication Middleware ============
-
-@app.before_request
-def check_auth():
-    """Check authentication for protected pages"""
-    # Admin pages require admin login
-    if request.path == '/selfie_booth/admin.html':
-        if not is_admin_logged_in():
-            return redirect('/selfie_booth/api/admin/login')
-    
-    # Kiosk pages require kiosk login  
-    elif request.path == '/selfie_booth/index.html':
-        if not is_kiosk_logged_in():
-            return redirect('/selfie_booth/api/kiosk/login')
-    
-    # Admin API endpoints require admin login
-    elif request.path.startswith('/selfie_booth/api/admin/') and not request.path.endswith('/login'):
-        if not is_admin_logged_in():
-            return jsonify({'success': False, 'error': 'Admin authentication required'}), 401
 
 # ============ Core API Endpoints ============
 
@@ -644,78 +600,7 @@ def get_image():
         image_b64 = base64.b64encode(image_bytes).decode('utf-8')
     return jsonify({'success': True, 'ready': True, 'image_data': f'data:image/jpeg;base64,{image_b64}'}), 200
 
-# ============ Login Endpoints ============
-
-@app.route('/selfie_booth/api/admin/login', methods=['GET', 'POST'])
-def admin_login():
-    """Admin login"""
-    if request.method == 'GET':
-        return f'''<!DOCTYPE html>
-<html><head><title>Admin Login</title>
-<style>body{{font-family:Arial;background:#667eea;padding:50px;}}
-.container{{background:white;padding:40px;border-radius:15px;max-width:400px;margin:0 auto;}}
-input{{width:100%;padding:12px;margin:10px 0;border:1px solid #ddd;border-radius:5px;box-sizing:border-box;}}
-button{{width:100%;padding:15px;background:#667eea;color:white;border:none;border-radius:5px;font-size:16px;}}</style>
-</head><body><div class="container"><h2>Admin Login</h2>
-<p>Password: <code>{ADMIN_PASSWORD}</code></p>
-<form method="POST"><input type="password" name="password" required><button type="submit">Login</button></form>
-</div></body></html>'''
-    
-    password = request.form.get('password', '')
-    if password == ADMIN_PASSWORD:
-        session['admin'] = True
-        session['admin_login_time'] = time.time()
-        session.permanent = True
-        return redirect('/selfie_booth/admin.html')
-    else:
-        return redirect('/selfie_booth/api/admin/login?error=Invalid')
-
-@app.route('/selfie_booth/api/kiosk/login', methods=['GET', 'POST'])
-def kiosk_login():
-    """Kiosk login"""
-    if request.method == 'GET':
-        return f'''<!DOCTYPE html>
-<html><head><title>Kiosk Login</title>
-<style>body{{font-family:Arial;background:#667eea;padding:50px;}}
-.container{{background:white;padding:40px;border-radius:15px;max-width:400px;margin:0 auto;}}
-input{{width:100%;padding:12px;margin:10px 0;border:1px solid #ddd;border-radius:5px;box-sizing:border-box;}}
-button{{width:100%;padding:15px;background:#667eea;color:white;border:none;border-radius:5px;font-size:16px;}}</style>
-</head><body><div class="container"><h2>Kiosk Login</h2>
-<p>Username: <code>{KIOSK_USERNAME}</code><br>Password: <code>{KIOSK_PASSWORD}</code></p>
-<form method="POST"><input type="text" name="username" required><input type="password" name="password" required><button type="submit">Login</button></form>
-</div></body></html>'''
-    
-    username = request.form.get('username', '')
-    password = request.form.get('password', '')
-    if username == KIOSK_USERNAME and password == KIOSK_PASSWORD:
-        session['kiosk'] = username
-        session.permanent = True
-        return redirect('/selfie_booth/index.html')
-    else:
-        return redirect('/selfie_booth/api/kiosk/login?error=Invalid')
-
 # ============ Admin Endpoints (Placeholders) ============
-
-@app.route('/selfie_booth/api/admin/stats')
-def admin_stats():
-    """Your existing admin stats but with auth"""
-    if not is_admin_logged_in():
-        return jsonify({'success': False, 'error': 'Admin authentication required'}), 401
-    
-    # Your existing stats code here...
-    current_active = len(active_sessions)
-    current_pending = sum(1 for session in active_sessions.values() 
-                         if session.get('state') == 'verification_needed')
-    
-    stats_data = {
-        'total_sessions': cumulative_stats['total_sessions_created'],
-        'verified_sessions': cumulative_stats['total_sessions_verified'],
-        'pending_sessions': current_pending,
-        'photos_taken': cumulative_stats['total_photos_taken'],
-        'current_active_sessions': current_active
-    }
-    
-    return jsonify({'success': True, 'data': stats_data}), 200
 
 @app.route('/admin/stats')
 def admin_stats():
@@ -747,12 +632,9 @@ def admin_stats():
             'error': f'Stats failed: {str(e)}'
         }), 500
 
-@app.route('/selfie_booth/api/admin/sessions')
+@app.route('/admin/sessions')
 def admin_sessions():
     """Admin sessions list endpoint"""
-    if not is_admin_logged_in():
-        return jsonify({'success': False, 'error': 'Admin authentication required'}), 401
-    
     try:
         sessions_list = []
         
@@ -790,97 +672,10 @@ def admin_sessions():
         return jsonify({
             'success': False,
             'error': f'Sessions list failed: {str(e)}'
-        }), 500
-
-@app.route('/admin/sessions')
-def admin_sessions_old():
-    """Admin sessions list endpoint"""
-    try:
-        sessions_list = []
-        
-        for tablet_id, session_data in active_sessions.items():
-            # Format session data for admin display - match expected field names
-            is_verified = (session_data.get('state') == 'photo_session' or 
-                          session_data.get('verified_at') is not None)
-            
-            session_info = {
-                'session_id': session_data.get('session_id', tablet_id),  # Use session_id or fallback to tablet_id
-                'tablet_id': tablet_id,
-                'first_name': session_data.get('user_name', 'Unknown'),  # Admin expects first_name not user_name
-                'phone': session_data.get('phone', 'N/A'),
-                'email': session_data.get('email', ''),
-                'verified': is_verified,  # Admin expects boolean verified not state
-                'state': session_data.get('state', 'unknown'),
-                'verification_code': session_data.get('verification_code', ''),
-                'created_at': session_data.get('timestamp', ''),
-                'verified_at': session_data.get('verified_at', '')
-            }
-            sessions_list.append(session_info)
-        
-        # Sort by creation time (most recent first)
-        sessions_list.sort(key=lambda x: x.get('created_at', ''), reverse=True)
-        
-        return jsonify({
-            'success': True,
-            'data': {
-                'sessions': sessions_list,
-                'total': len(sessions_list)
-            }
-        }), 200
-        
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': f'Sessions list failed: {str(e)}'
-        }), 500
-
-@app.route('/selfie_booth/api/admin/reset', methods=['POST'])
-def admin_reset():
-    """Admin reset sessions endpoint"""
-    if not is_admin_logged_in():
-        return jsonify({'success': False, 'error': 'Admin authentication required'}), 401
-    
-    try:
-        # Get reset type from request (optional)
-        reset_type = 'sessions'  # Default: only reset active sessions
-        if request.is_json:
-            data = request.get_json() or {}
-            reset_type = data.get('type', 'sessions')  # 'sessions' or 'all'
-        
-        # Count current sessions before clearing
-        deleted_count = len(active_sessions)
-        
-        # Always clear active sessions
-        active_sessions.clear()
-        
-        message = f'Successfully reset {deleted_count} active sessions'
-        
-        # Optionally reset cumulative stats
-        if reset_type == 'all':
-            old_totals = cumulative_stats.copy()
-            cumulative_stats['total_sessions_created'] = 0
-            cumulative_stats['total_sessions_verified'] = 0
-            cumulative_stats['total_photos_taken'] = 0
-            save_cumulative_stats()  # Persist reset to file
-            message += f' and cumulative stats (was {old_totals["total_sessions_created"]} total sessions)'
-        
-        return jsonify({
-            'success': True,
-            'data': {
-                'deleted_count': deleted_count,
-                'reset_type': reset_type,
-                'message': message
-            }
-        }), 200
-        
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': f'Reset failed: {str(e)}'
         }), 500
 
 @app.route('/admin/reset', methods=['POST'])
-def admin_reset_old():
+def admin_reset():
     """Admin reset sessions endpoint"""
     try:
         # Get reset type from request (optional)
@@ -921,45 +716,8 @@ def admin_reset_old():
             'error': f'Reset failed: {str(e)}'
         }), 500
 
-@app.route('/selfie_booth/api/admin/history')
-def admin_history():
-    """Admin session history endpoint"""
-    if not is_admin_logged_in():
-        return jsonify({'success': False, 'error': 'Admin authentication required'}), 401
-    
-    try:
-        history = load_session_history()
-        
-        # Sort by most recent first
-        history.sort(key=lambda x: x.get('completed_at', ''), reverse=True)
-        
-        # Optional pagination
-        page = int(request.args.get('page', 1))
-        per_page = int(request.args.get('per_page', 50))
-        start = (page - 1) * per_page
-        end = start + per_page
-        
-        paginated_history = history[start:end]
-        
-        return jsonify({
-            'success': True,
-            'data': {
-                'sessions': paginated_history,
-                'total': len(history),
-                'page': page,
-                'per_page': per_page,
-                'total_pages': (len(history) + per_page - 1) // per_page
-            }
-        }), 200
-        
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': f'History retrieval failed: {str(e)}'
-        }), 500
-
 @app.route('/admin/history')
-def admin_history_old():
+def admin_history():
     """Admin session history endpoint"""
     try:
         history = load_session_history()
@@ -994,44 +752,8 @@ def admin_history_old():
 
 # ============ Kiosk Management API ============
 
-@app.route('/selfie_booth/api/kiosk/status')
-def kiosk_status():
-    """Kiosk status - simplified"""
-    return jsonify({
-        'success': True,
-        'data': {
-            '1': {'status': 'available', 'location': 'lobby'},
-            '2': {'status': 'available', 'location': 'entrance'}
-        }
-    }), 200
-
-@app.route('/selfie_booth/api/kiosk/checkout', methods=['POST', 'OPTIONS'])
-def kiosk_checkout():
-    """Kiosk checkout - simplified for auth only"""
-    if request.method == 'OPTIONS':
-        return '', 200
-    
-    if not is_kiosk_logged_in():
-        return jsonify({'success': False, 'error': 'Kiosk authentication required'}), 401
-    
-    # Simple response - just assign a kiosk number
-    import random
-    kiosk_id = random.randint(1, 50)
-    
-    return jsonify({
-        'success': True,
-        'data': {
-            'session_id': f'session_{kiosk_id}_{int(time.time())}',
-            'kiosk_id': kiosk_id,
-            'status': {
-                'status': 'in_use',
-                'location': f'kiosk_{kiosk_id}'
-            }
-        }
-    }), 200
-
 @app.route('/kiosk/status')
-def kiosk_status_old():
+def kiosk_status():
     """Get status of all kiosks"""
     try:
         status = load_kiosk_status()
@@ -1046,7 +768,7 @@ def kiosk_status_old():
         }), 500
 
 @app.route('/kiosk/checkout', methods=['POST', 'OPTIONS'])
-def kiosk_checkout_old():
+def kiosk_checkout():
     """Checkout a specific kiosk"""
     if request.method == 'OPTIONS':
         return '', 200
@@ -1152,38 +874,8 @@ def kiosk_checkin():
             'error': f'Checkin failed: {str(e)}'
         }), 500
 
-@app.route('/selfie_booth/api/admin/kiosks')
-def admin_kiosks():
-    """Admin endpoint to view all kiosk statuses"""
-    if not is_admin_logged_in():
-        return jsonify({'success': False, 'error': 'Admin authentication required'}), 401
-    
-    try:
-        status = load_kiosk_status()
-        cleanup_expired_kiosk_sessions(status)
-        save_kiosk_status(status)
-        
-        return jsonify({
-            'success': True,
-            'data': {
-                'kiosks': status,
-                'summary': {
-                    'total': len(status),
-                    'available': len([k for k in status.values() if k['status'] == 'available']),
-                    'in_use': len([k for k in status.values() if k['status'] == 'in_use']),
-                    'maintenance': len([k for k in status.values() if k['status'] == 'maintenance'])
-                }
-            }
-        }), 200
-        
-    except Exception as e:
-        return jsonify({
-            'success': False,
-            'error': f'Failed to get kiosk admin data: {str(e)}'
-        }), 500
-
 @app.route('/admin/kiosks')
-def admin_kiosks_old():
+def admin_kiosks():
     """Admin endpoint to view all kiosk statuses"""
     try:
         status = load_kiosk_status()
