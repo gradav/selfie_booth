@@ -1,0 +1,174 @@
+#!/home/n99fc05/virtualenv/lockhartlovesyou.com/selfie_booth/api/3.9/bin/python
+"""
+CLEAN SOLUTION: Keep your existing app.py working endpoints,
+just add the missing authentication and kiosk management endpoints
+that your frontend actually needs.
+"""
+
+# START WITH YOUR WORKING current_app.py - just add these pieces:
+
+# 1. ADD SESSION SUPPORT (minimal addition)
+from flask import session
+import time
+
+# Session timeout 
+ADMIN_SESSION_TIMEOUT = 7200
+
+# Environment variables for auth
+import os
+ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
+KIOSK_USERNAME = os.environ.get('KIOSK_USERNAME', 'kiosk')  
+KIOSK_PASSWORD = os.environ.get('KIOSK_PASSWORD', 'kiosk123')
+
+def is_admin_logged_in():
+    """Check if admin is logged in and session hasn't expired"""
+    if not session.get('admin'):
+        return False
+    login_time = session.get('admin_login_time', 0)
+    if time.time() - login_time > ADMIN_SESSION_TIMEOUT:
+        session.pop('admin', None)
+        session.pop('admin_login_time', None)
+        return False
+    return True
+
+def is_kiosk_logged_in():
+    """Check if kiosk is logged in"""
+    return session.get('kiosk') is not None
+
+# 2. ADD THE MISSING ENDPOINTS YOUR FRONTEND EXPECTS
+
+@app.route('/selfie_booth/api/kiosk/checkout', methods=['POST', 'OPTIONS'])
+def kiosk_checkout():
+    """Kiosk checkout - simplified for auth only"""
+    if request.method == 'OPTIONS':
+        return '', 200
+    
+    if not is_kiosk_logged_in():
+        return jsonify({'success': False, 'error': 'Kiosk authentication required'}), 401
+    
+    # Simple response - just assign a kiosk number
+    import random
+    kiosk_id = random.randint(1, 50)
+    
+    return jsonify({
+        'success': True,
+        'data': {
+            'session_id': f'session_{kiosk_id}_{int(time.time())}',
+            'kiosk_id': kiosk_id,
+            'status': {
+                'status': 'in_use',
+                'location': f'kiosk_{kiosk_id}'
+            }
+        }
+    }), 200
+
+@app.route('/selfie_booth/api/kiosk/status')
+def kiosk_status():
+    """Kiosk status - simplified"""
+    return jsonify({
+        'success': True,
+        'data': {
+            '1': {'status': 'available', 'location': 'lobby'},
+            '2': {'status': 'available', 'location': 'entrance'}
+        }
+    }), 200
+
+# 3. ADD SIMPLE LOGIN ENDPOINTS
+
+@app.route('/selfie_booth/api/admin/login', methods=['GET', 'POST'])
+def admin_login():
+    """Admin login"""
+    if request.method == 'GET':
+        return f'''<!DOCTYPE html>
+<html><head><title>Admin Login</title>
+<style>body{{font-family:Arial;background:#667eea;padding:50px;}}
+.container{{background:white;padding:40px;border-radius:15px;max-width:400px;margin:0 auto;}}
+input{{width:100%;padding:12px;margin:10px 0;border:1px solid #ddd;border-radius:5px;box-sizing:border-box;}}
+button{{width:100%;padding:15px;background:#667eea;color:white;border:none;border-radius:5px;font-size:16px;}}</style>
+</head><body><div class="container"><h2>Admin Login</h2>
+<p>Password: <code>{ADMIN_PASSWORD}</code></p>
+<form method="POST"><input type="password" name="password" required><button type="submit">Login</button></form>
+</div></body></html>'''
+    
+    password = request.form.get('password', '')
+    if password == ADMIN_PASSWORD:
+        session['admin'] = True
+        session['admin_login_time'] = time.time()
+        session.permanent = True
+        return redirect('/selfie_booth/admin.html')
+    else:
+        return redirect('/selfie_booth/api/admin/login?error=Invalid')
+
+@app.route('/selfie_booth/api/kiosk/login', methods=['GET', 'POST'])
+def kiosk_login():
+    """Kiosk login"""
+    if request.method == 'GET':
+        return f'''<!DOCTYPE html>
+<html><head><title>Kiosk Login</title>
+<style>body{{font-family:Arial;background:#667eea;padding:50px;}}
+.container{{background:white;padding:40px;border-radius:15px;max-width:400px;margin:0 auto;}}
+input{{width:100%;padding:12px;margin:10px 0;border:1px solid #ddd;border-radius:5px;box-sizing:border-box;}}
+button{{width:100%;padding:15px;background:#667eea;color:white;border:none;border-radius:5px;font-size:16px;}}</style>
+</head><body><div class="container"><h2>Kiosk Login</h2>
+<p>Username: <code>{KIOSK_USERNAME}</code><br>Password: <code>{KIOSK_PASSWORD}</code></p>
+<form method="POST"><input type="text" name="username" required><input type="password" name="password" required><button type="submit">Login</button></form>
+</div></body></html>'''
+    
+    username = request.form.get('username', '')
+    password = request.form.get('password', '')
+    if username == KIOSK_USERNAME and password == KIOSK_PASSWORD:
+        session['kiosk'] = username
+        session.permanent = True
+        return redirect('/selfie_booth/index.html')
+    else:
+        return redirect('/selfie_booth/api/kiosk/login?error=Invalid')
+
+# 4. PROTECT YOUR EXISTING ADMIN ENDPOINTS (just add auth check)
+
+# Modify your existing admin endpoints to add this line at the start:
+# if not is_admin_logged_in():
+#     return jsonify({'success': False, 'error': 'Admin authentication required'}), 401
+
+# EXAMPLE - modify your existing /selfie_booth/api/admin/stats endpoint:
+@app.route('/selfie_booth/api/admin/stats')
+def admin_stats_protected():
+    """Your existing admin stats but with auth"""
+    if not is_admin_logged_in():
+        return jsonify({'success': False, 'error': 'Admin authentication required'}), 401
+    
+    # Your existing stats code here...
+    current_active = len(active_sessions)
+    current_pending = sum(1 for session in active_sessions.values() 
+                         if session.get('state') == 'verification_needed')
+    
+    stats_data = {
+        'total_sessions': cumulative_stats['total_sessions_created'],
+        'verified_sessions': cumulative_stats['total_sessions_verified'],
+        'pending_sessions': current_pending,
+        'photos_taken': cumulative_stats['total_photos_taken'],
+        'current_active_sessions': current_active
+    }
+    
+    return jsonify({'success': True, 'data': stats_data}), 200
+
+# 5. ADD PROTECTION MIDDLEWARE FOR YOUR EXISTING PAGES
+
+@app.before_request
+def check_auth():
+    """Check authentication for protected pages"""
+    # Admin pages require admin login
+    if request.path == '/selfie_booth/admin.html':
+        if not is_admin_logged_in():
+            return redirect('/selfie_booth/api/admin/login')
+    
+    # Kiosk pages require kiosk login  
+    elif request.path == '/selfie_booth/index.html':
+        if not is_kiosk_logged_in():
+            return redirect('/selfie_booth/api/kiosk/login')
+    
+    # Admin API endpoints require admin login
+    elif request.path.startswith('/selfie_booth/api/admin/') and not request.path.endswith('/login'):
+        if not is_admin_logged_in():
+            return jsonify({'success': False, 'error': 'Admin authentication required'}), 401
+
+# That's it! Keep everything else from your working current_app.py unchanged.
