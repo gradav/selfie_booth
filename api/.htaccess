@@ -4,3 +4,6 @@ PassengerBaseURI "/selfie_booth/api"
 PassengerPython "/home/n99fc05/virtualenv/lockhartlovesyou.com/selfie_booth/api/3.9/bin/python"
 PassengerAppLogFile "/home/n99fc05/logs/bigtest3.log"
 # DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION END
+
+# Route main selfie_booth path to Flask for authentication
+PassengerBaseURI "/selfie_booth"
