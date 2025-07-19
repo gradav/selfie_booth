@@ -236,13 +236,13 @@ def admin_logout():
     """Admin logout"""
     session.pop('admin', None)
     session.pop('admin_login_time', None)
-    return redirect('/selfie_booth/admin/login')
+    return redirect('/selfie_booth/api/admin/login')
 
 @app.route('/kiosk/logout', methods=['GET', 'POST'])
 def kiosk_logout():
     """Kiosk logout"""
     session.pop('kiosk', None)
-    return redirect('/selfie_booth/kiosk/login')
+    return redirect('/selfie_booth/api/kiosk/login')
 
 # ============ Page Routes ============
 
