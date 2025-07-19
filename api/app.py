@@ -251,7 +251,20 @@ def kiosk_logout():
 def kiosk_page():
     """Serve kiosk page through Flask (requires authentication)"""
     if not is_kiosk_logged_in():
-        return redirect('/selfie_booth/api/kiosk/login')
+        # Return offline page instead of redirecting
+        return '''<!DOCTYPE html>
+<html><head><title>Kiosk Offline</title>
+<style>body{font-family:Arial;background:#f0f0f0;padding:50px;text-align:center;}
+.container{background:white;padding:40px;border-radius:15px;max-width:400px;margin:0 auto;border:3px solid #ff6b6b;}
+h1{color:#ff6b6b;margin-bottom:20px;}
+p{color:#666;font-size:18px;margin:10px 0;}
+.status{background:#ff6b6b;color:white;padding:10px;border-radius:5px;font-weight:bold;}</style>
+</head><body><div class="container">
+<h1>🔌 Kiosk Offline</h1>
+<div class="status">SYSTEM OFFLINE</div>
+<p>This kiosk is currently offline.</p>
+<p>Please contact staff for assistance.</p>
+</div></body></html>'''
     
     # Serve the static index.html file
     try:
