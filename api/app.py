@@ -52,15 +52,18 @@ else:
         
         return response
 
+# Session timeout 
+ADMIN_SESSION_TIMEOUT = 7200
+
 # Basic configuration - Use environment variable for secret key
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', os.environ.get('FLASK_SECRET_KEY', 'selfie-booth-secret-key-change-in-production'))
 app.config['DEBUG'] = False
-app.config['SESSION_COOKIE_SECURE'] = True  # Require HTTPS for cookies
+
+# Session configuration - more compatible settings
+app.config['SESSION_COOKIE_SECURE'] = False  # Set to True only if you have proper HTTPS
 app.config['SESSION_COOKIE_HTTPONLY'] = True  # Prevent XSS access to cookies
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # CSRF protection
-
-# Session timeout 
-ADMIN_SESSION_TIMEOUT = 7200
+app.config['PERMANENT_SESSION_LIFETIME'] = ADMIN_SESSION_TIMEOUT
 
 # Environment variables for auth
 ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
@@ -70,15 +73,26 @@ KIOSK_PASSWORD = os.environ.get('KIOSK_PASSWORD', 'kiosk123')
 def is_admin_logged_in():
     """Check if admin is logged in and session hasn't expired"""
     try:
-        if not session.get('admin'):
-            return False
+        admin_flag = session.get('admin')
         login_time = session.get('admin_login_time', 0)
-        if time.time() - login_time > ADMIN_SESSION_TIMEOUT:
+        current_time = time.time()
+        
+        print(f"Auth check - admin: {admin_flag}, login_time: {login_time}, current: {current_time}", file=sys.stderr)
+        
+        if not admin_flag:
+            print("Auth check - no admin flag", file=sys.stderr)
+            return False
+            
+        if current_time - login_time > ADMIN_SESSION_TIMEOUT:
+            print("Auth check - session expired", file=sys.stderr)
             session.pop('admin', None)
             session.pop('admin_login_time', None)
             return False
+            
+        print("Auth check - authenticated", file=sys.stderr)
         return True
-    except Exception:
+    except Exception as e:
+        print(f"Auth check - exception: {e}", file=sys.stderr)
         return False
 
 def is_kiosk_logged_in():
