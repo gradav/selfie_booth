@@ -272,8 +272,16 @@ def kiosk_logout():
 @app.route('/admin_secure')
 def serve_admin_page():
     """Serve admin page with authentication"""
-    if not is_admin_logged_in():
+    print("=== ADMIN_SECURE ROUTE CALLED ===", file=sys.stderr)
+    
+    auth_result = is_admin_logged_in()
+    print(f"Authentication result: {auth_result}", file=sys.stderr)
+    
+    if not auth_result:
+        print("Redirecting to login", file=sys.stderr)
         return redirect('/selfie_booth/api/admin/login')
+    
+    print("Authentication passed, serving admin page", file=sys.stderr)
     
     # Read and serve the admin.html file - look for the backup we just created
     admin_file_path = os.path.join(os.path.dirname(current_dir), 'admin.html.backup')
