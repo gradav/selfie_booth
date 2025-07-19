@@ -54,18 +54,24 @@ KIOSK_PASSWORD = os.environ.get('KIOSK_PASSWORD', 'kiosk123')
 
 def is_admin_logged_in():
     """Check if admin is logged in and session hasn't expired"""
-    if not session.get('admin'):
+    try:
+        if not session.get('admin'):
+            return False
+        login_time = session.get('admin_login_time', 0)
+        if time.time() - login_time > ADMIN_SESSION_TIMEOUT:
+            session.pop('admin', None)
+            session.pop('admin_login_time', None)
+            return False
+        return True
+    except Exception:
         return False
-    login_time = session.get('admin_login_time', 0)
-    if time.time() - login_time > ADMIN_SESSION_TIMEOUT:
-        session.pop('admin', None)
-        session.pop('admin_login_time', None)
-        return False
-    return True
 
 def is_kiosk_logged_in():
     """Check if kiosk is logged in"""
-    return session.get('kiosk') is not None
+    try:
+        return session.get('kiosk') is not None
+    except Exception:
+        return False
 
 # In-memory session storage (for simple cross-device communication)
 active_sessions = {}
