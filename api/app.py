@@ -231,14 +231,14 @@ def check_auth():
 
 # ============ Logout Endpoints ============
 
-@app.route('/admin/logout', methods=['GET', 'POST'])
+@app.route('/selfie_booth/admin/logout', methods=['GET', 'POST'])
 def admin_logout():
     """Admin logout"""
     session.pop('admin', None)
     session.pop('admin_login_time', None)
     return redirect('/selfie_booth/admin/login')
 
-@app.route('/kiosk/logout', methods=['GET', 'POST'])
+@app.route('/selfie_booth/kiosk/logout', methods=['GET', 'POST'])
 def kiosk_logout():
     """Kiosk logout"""
     session.pop('kiosk', None)
@@ -708,7 +708,7 @@ def get_image():
 
 # ============ Login Endpoints ============
 
-@app.route('/admin/login', methods=['GET', 'POST'])
+@app.route('/selfie_booth/admin/login', methods=['GET', 'POST'])
 def admin_login():
     """Admin login"""
     if request.method == 'GET':
@@ -732,7 +732,7 @@ button{{width:100%;padding:15px;background:#667eea;color:white;border:none;borde
     else:
         return redirect('/selfie_booth/admin/login?error=Invalid')
 
-@app.route('/kiosk/login', methods=['GET', 'POST'])
+@app.route('/selfie_booth/kiosk/login', methods=['GET', 'POST'])
 def kiosk_login():
     """Kiosk login"""
     if request.method == 'GET':
@@ -758,7 +758,7 @@ button{{width:100%;padding:15px;background:#667eea;color:white;border:none;borde
 
 # ============ Admin Endpoints (Placeholders) ============
 
-@app.route('/admin/stats')
+@app.route('/selfie_booth/admin/stats')
 def admin_stats():
     """Admin statistics endpoint"""
     if not is_admin_logged_in():
@@ -791,7 +791,7 @@ def admin_stats():
             'error': f'Stats failed: {str(e)}'
         }), 500
 
-@app.route('/admin/sessions')
+@app.route('/selfie_booth/admin/sessions')
 def admin_sessions():
     """Admin sessions list endpoint"""
     if not is_admin_logged_in():
@@ -836,7 +836,7 @@ def admin_sessions():
             'error': f'Sessions list failed: {str(e)}'
         }), 500
 
-@app.route('/admin/reset', methods=['POST'])
+@app.route('/selfie_booth/admin/reset', methods=['POST'])
 def admin_reset():
     """Admin reset sessions endpoint"""
     if not is_admin_logged_in():
@@ -881,7 +881,7 @@ def admin_reset():
             'error': f'Reset failed: {str(e)}'
         }), 500
 
-@app.route('/admin/history')
+@app.route('/selfie_booth/admin/history')
 def admin_history():
     """Admin session history endpoint"""
     if not is_admin_logged_in():
@@ -1045,7 +1045,7 @@ def kiosk_checkin():
             'error': f'Checkin failed: {str(e)}'
         }), 500
 
-@app.route('/admin/kiosks')
+@app.route('/selfie_booth/admin/kiosks')
 def admin_kiosks():
     """Admin endpoint to view all kiosk statuses"""
     if not is_admin_logged_in():
