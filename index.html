@@ -188,17 +188,14 @@
             } catch (error) {
                 console.error('Kiosk checkout failed:', error);
                 
-                // Fallback to manual assignment
-                this.kioskId = Math.floor(Math.random() * 50) + 1;
-                this.tabletId = `TABLET${this.kioskId}`;
-                this.location = `kiosk_${this.kioskId}`;
-                this.mobileUrl = `${window.location.origin}/selfie_booth/${this.kioskId}`;
-                
-                if (statusElement) {
-                    statusElement.textContent = 'Using fallback kiosk assignment';
-                    statusElement.style.color = '#FF5722';
+                // Check if it's an authentication error
+                if (error.message.includes('401') || error.message.includes('authentication')) {
+                    this.showOfflinePage();
+                    return false;
                 }
                 
+                // For other errors, show offline
+                this.showOfflinePage();
                 return false;
             }
         }
@@ -214,6 +211,34 @@
                 statusElement.textContent = 'Ready';
                 statusElement.style.color = '#4CAF50';
             }
+        }
+
+        showOfflinePage() {
+            // Hide all screens
+            const screens = document.querySelectorAll('.screen');
+            screens.forEach(screen => screen.classList.remove('active'));
+            
+            // Update status
+            const statusElement = document.getElementById('status');
+            if (statusElement) {
+                statusElement.textContent = 'OFFLINE - Authentication Required';
+                statusElement.style.color = '#f44336';
+            }
+            
+            // Replace main content with offline message
+            const kioskContainer = document.querySelector('.kiosk-container');
+            if (kioskContainer) {
+                kioskContainer.innerHTML = `
+                    <h1>🔌 Kiosk Offline</h1>
+                    <div style="background:#f44336;color:white;padding:20px;border-radius:10px;margin:20px 0;">
+                        <h2>SYSTEM OFFLINE</h2>
+                    </div>
+                    <p style="color:#666;font-size:18px;">This kiosk is currently offline.</p>
+                    <p style="color:#666;font-size:18px;">Please contact staff for assistance.</p>
+                `;
+            }
+            
+            console.log('🔌 Kiosk offline - authentication required');
         }
 
         // ============ State Management ============
