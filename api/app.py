@@ -210,6 +210,40 @@ def save_session_image(session_id, image_data):
 # Initialize on startup
 ensure_images_dir()
 
+# ============ Authentication Middleware ============
+
+@app.before_request
+def check_auth():
+    """Check authentication for protected pages"""
+    # Skip auth for login endpoints
+    if request.path.endswith('/login'):
+        return
+    
+    # Admin pages require admin login
+    if request.path == '/selfie_booth/admin.html':
+        if not is_admin_logged_in():
+            return redirect('/selfie_booth/api/admin/login')
+    
+    # Kiosk pages require kiosk login  
+    elif request.path == '/selfie_booth/index.html':
+        if not is_kiosk_logged_in():
+            return redirect('/selfie_booth/api/kiosk/login')
+
+# ============ Logout Endpoints ============
+
+@app.route('/admin/logout', methods=['GET', 'POST'])
+def admin_logout():
+    """Admin logout"""
+    session.pop('admin', None)
+    session.pop('admin_login_time', None)
+    return redirect('/selfie_booth/api/admin/login')
+
+@app.route('/kiosk/logout', methods=['GET', 'POST'])
+def kiosk_logout():
+    """Kiosk logout"""
+    session.pop('kiosk', None)
+    return redirect('/selfie_booth/api/kiosk/login')
+
 # ============ Core API Endpoints ============
 
 @app.route('/')
