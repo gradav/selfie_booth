@@ -231,14 +231,14 @@ def check_auth():
 
 # ============ Logout Endpoints ============
 
-@app.route('/selfie_booth/admin/logout', methods=['GET', 'POST'])
+@app.route('/admin/logout', methods=['GET', 'POST'])
 def admin_logout():
     """Admin logout"""
     session.pop('admin', None)
     session.pop('admin_login_time', None)
     return redirect('/selfie_booth/admin/login')
 
-@app.route('/selfie_booth/kiosk/logout', methods=['GET', 'POST'])
+@app.route('/kiosk/logout', methods=['GET', 'POST'])
 def kiosk_logout():
     """Kiosk logout"""
     session.pop('kiosk', None)
@@ -246,8 +246,8 @@ def kiosk_logout():
 
 # ============ Page Routes ============
 
-@app.route('/selfie_booth/')
-@app.route('/selfie_booth/index.html')
+@app.route('/')
+@app.route('/index.html')
 def kiosk_page():
     """Serve kiosk page through Flask (requires authentication)"""
     if not is_kiosk_logged_in():
@@ -273,7 +273,7 @@ p{color:#666;font-size:18px;margin:10px 0;}
     except FileNotFoundError:
         return "Kiosk page not found", 404
 
-@app.route('/selfie_booth/admin.html')
+@app.route('/admin.html')
 def admin_page():
     """Serve admin page through Flask (requires authentication)"""
     if not is_admin_logged_in():
@@ -708,7 +708,7 @@ def get_image():
 
 # ============ Login Endpoints ============
 
-@app.route('/selfie_booth/admin/login', methods=['GET', 'POST'])
+@app.route('/admin/login', methods=['GET', 'POST'])
 def admin_login():
     """Admin login"""
     if request.method == 'GET':
@@ -732,7 +732,7 @@ button{{width:100%;padding:15px;background:#667eea;color:white;border:none;borde
     else:
         return redirect('/selfie_booth/admin/login?error=Invalid')
 
-@app.route('/selfie_booth/kiosk/login', methods=['GET', 'POST'])
+@app.route('/kiosk/login', methods=['GET', 'POST'])
 def kiosk_login():
     """Kiosk login"""
     if request.method == 'GET':
@@ -758,7 +758,7 @@ button{{width:100%;padding:15px;background:#667eea;color:white;border:none;borde
 
 # ============ Admin Endpoints (Placeholders) ============
 
-@app.route('/selfie_booth/admin/stats')
+@app.route('/admin/stats')
 def admin_stats():
     """Admin statistics endpoint"""
     if not is_admin_logged_in():
@@ -935,7 +935,7 @@ def kiosk_status():
             'error': f'Failed to get kiosk status: {str(e)}'
         }), 500
 
-@app.route('/selfie_booth/kiosk/checkout', methods=['POST', 'OPTIONS'])
+@app.route('/kiosk/checkout', methods=['POST', 'OPTIONS'])
 def kiosk_checkout():
     """Checkout a specific kiosk"""
     if request.method == 'OPTIONS':
