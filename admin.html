@@ -722,7 +722,7 @@
 
             async loadSessions() {
                 try {
-                    const response = await this.apiCall('../../selfie_booth/admin/sessions');
+                    const response = await this.apiCall('admin/sessions');
                     if (response.success) {
                         this.displaySessions(response.data.sessions || []);
                     }
@@ -734,7 +734,7 @@
 
             async loadKiosks() {
                 try {
-                    const response = await this.apiCall('/selfie_booth/api/admin/kiosks');
+                    const response = await this.apiCall('admin/kiosks');
                     if (response.success) {
                         this.displayKiosks(response.data.kiosks || {});
                         this.updateKioskSummary(response.data.summary || {});
@@ -920,7 +920,7 @@
 
             async resetAllSessions() {
                 try {
-                    const response = await this.apiCall('/selfie_booth/api/admin/reset', 'POST');
+                    const response = await this.apiCall('admin/reset', 'POST');
                     if (response.success) {
                         alert(`Reset ${response.data.deleted_count || 0} sessions`);
                         await this.loadDashboardData();
@@ -1153,7 +1153,7 @@
             
             async releaseKiosk(kioskId) {
                 try {
-                    const response = await this.apiCall('/selfie_booth/api/kiosk/checkin', 'POST', {
+                    const response = await this.apiCall('kiosk/checkin', 'POST', {
                         kiosk_id: kioskId
                     });
                     

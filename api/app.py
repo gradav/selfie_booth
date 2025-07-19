@@ -841,7 +841,7 @@ def admin_stats():
             'error': f'Stats failed: {str(e)}'
         }), 500
 
-@app.route('/selfie_booth/admin/sessions')
+@app.route('/admin/sessions')
 def admin_sessions():
     """Admin sessions list endpoint"""
     if not is_admin_logged_in():
@@ -886,7 +886,7 @@ def admin_sessions():
             'error': f'Sessions list failed: {str(e)}'
         }), 500
 
-@app.route('/selfie_booth/admin/reset', methods=['POST'])
+@app.route('/admin/reset', methods=['POST'])
 def admin_reset():
     """Admin reset sessions endpoint"""
     if not is_admin_logged_in():
@@ -931,7 +931,7 @@ def admin_reset():
             'error': f'Reset failed: {str(e)}'
         }), 500
 
-@app.route('/selfie_booth/admin/history')
+@app.route('/admin/history')
 def admin_history():
     """Admin session history endpoint"""
     if not is_admin_logged_in():
@@ -970,7 +970,7 @@ def admin_history():
 
 # ============ Kiosk Management API ============
 
-@app.route('/selfie_booth/kiosk/status')
+@app.route('/kiosk/status')
 def kiosk_status():
     """Get status of all kiosks"""
     try:
@@ -1055,7 +1055,7 @@ def kiosk_checkout():
             'error': f'Checkout failed: {str(e)}'
         }), 500
 
-@app.route('/selfie_booth/kiosk/checkin', methods=['POST', 'OPTIONS'])
+@app.route('/kiosk/checkin', methods=['POST', 'OPTIONS'])
 def kiosk_checkin():
     """Check in / release a kiosk"""
     if request.method == 'OPTIONS':
@@ -1110,7 +1110,7 @@ def kiosk_checkin():
             'error': f'Checkin failed: {str(e)}'
         }), 500
 
-@app.route('/selfie_booth/admin/kiosks')
+@app.route('/admin/kiosks')
 def admin_kiosks():
     """Admin endpoint to view all kiosk statuses"""
     if not is_admin_logged_in():
