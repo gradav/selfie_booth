@@ -706,7 +706,7 @@
 
             async loadStats() {
                 try {
-                    const response = await this.apiCall('/admin/stats');
+                    const response = await this.apiCall('admin/stats');
                     if (response.success) {
                         const stats = response.data;
                         this.updateStatCard('total-sessions', stats.total_sessions || 0);
@@ -722,7 +722,7 @@
 
             async loadSessions() {
                 try {
-                    const response = await this.apiCall('/selfie_booth/admin/sessions');
+                    const response = await this.apiCall('../../selfie_booth/admin/sessions');
                     if (response.success) {
                         this.displaySessions(response.data.sessions || []);
                     }
@@ -734,7 +734,7 @@
 
             async loadKiosks() {
                 try {
-                    const response = await this.apiCall('/selfie_booth/admin/kiosks');
+                    const response = await this.apiCall('/selfie_booth/api/admin/kiosks');
                     if (response.success) {
                         this.displayKiosks(response.data.kiosks || {});
                         this.updateKioskSummary(response.data.summary || {});
@@ -747,7 +747,7 @@
 
             async checkSystemHealth() {
                 try {
-                    const response = await this.apiCall('/health');
+                    const response = await this.apiCall('health');
                     if (response.success) {
                         const health = response.data;
                         this.updateStatus('db-status', health.database === 'connected' ? 'success' : 'error', 
@@ -920,7 +920,7 @@
 
             async resetAllSessions() {
                 try {
-                    const response = await this.apiCall('/selfie_booth/admin/reset', 'POST');
+                    const response = await this.apiCall('/selfie_booth/api/admin/reset', 'POST');
                     if (response.success) {
                         alert(`Reset ${response.data.deleted_count || 0} sessions`);
                         await this.loadDashboardData();
@@ -1153,7 +1153,7 @@
             
             async releaseKiosk(kioskId) {
                 try {
-                    const response = await this.apiCall('/selfie_booth/kiosk/checkin', 'POST', {
+                    const response = await this.apiCall('/selfie_booth/api/kiosk/checkin', 'POST', {
                         kiosk_id: kioskId
                     });
                     
