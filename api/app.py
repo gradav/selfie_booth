@@ -255,7 +255,7 @@ def kiosk_logout():
 
 # ============ Secure Static Page Routes ============
 
-@app.route('/selfie_booth/admin.html')
+@app.route('/admin_secure')
 def serve_admin_page():
     """Serve admin page with authentication"""
     if not is_admin_logged_in():
@@ -270,8 +270,7 @@ def serve_admin_page():
     except FileNotFoundError:
         return jsonify({'error': 'Admin page not found'}), 404
 
-@app.route('/selfie_booth/index.html')
-@app.route('/selfie_booth/')
+@app.route('/kiosk_secure')
 def serve_kiosk_page():
     """Serve kiosk page with authentication"""
     if not is_kiosk_logged_in():
@@ -286,7 +285,7 @@ def serve_kiosk_page():
     except FileNotFoundError:
         return jsonify({'error': 'Kiosk page not found'}), 404
 
-@app.route('/selfie_booth/mobile.html')
+@app.route('/mobile_secure')
 def serve_mobile_page():
     """Serve mobile page - accessible without authentication for user registration"""
     mobile_file_path = os.path.join(os.path.dirname(current_dir), 'mobile.html')
@@ -297,7 +296,7 @@ def serve_mobile_page():
     except FileNotFoundError:
         return jsonify({'error': 'Mobile page not found'}), 404
 
-@app.route('/selfie_booth/assets/<path:filename>')
+@app.route('/assets/<path:filename>')
 def serve_assets(filename):
     """Serve assets (CSS/JS) - needed for all pages"""
     assets_dir = os.path.join(os.path.dirname(current_dir), 'assets')

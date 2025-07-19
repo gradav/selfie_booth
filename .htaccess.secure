@@ -6,23 +6,23 @@ RewriteEngine On
 
 # ============ SECURITY: Block Direct Access to Static HTML ============
 # Redirect all HTML files to Flask for authentication
-RewriteRule ^admin\.html$ /selfie_booth/api/admin.html [R=301,L]
-RewriteRule ^index\.html$ /selfie_booth/api/kiosk.html [R=301,L] 
-RewriteRule ^mobile\.html$ /selfie_booth/api/mobile.html [R=301,L]
+RewriteRule ^admin\.html$ /selfie_booth/api/admin_secure [R=301,L]
+RewriteRule ^index\.html$ /selfie_booth/api/kiosk_secure [R=301,L] 
+RewriteRule ^mobile\.html$ /selfie_booth/api/mobile_secure [R=301,L]
 
 # Block direct access to sensitive files
 RewriteRule \.(env|log|py|pyc|pyo|ini|conf|bak|json)$ - [F,L]
 
 # ============ Dynamic Kiosk Routing ============
 # Route numbered URLs to mobile registration with kiosk assignment
-RewriteRule ^([0-9]+)/?$ /selfie_booth/mobile.html?tablet_id=TABLET$1&location=kiosk_$1&kiosk_id=$1 [R=302,L]
+RewriteRule ^([0-9]+)/?$ /selfie_booth/api/mobile_secure?tablet_id=TABLET$1&location=kiosk_$1&kiosk_id=$1 [R=302,L]
 
 # ============ Legacy URL Support ============
-RewriteRule ^mobile/?$ /selfie_booth/mobile.html [R=301,L]
-RewriteRule ^admin/?$ /selfie_booth/admin.html [R=301,L]
+RewriteRule ^mobile/?$ /selfie_booth/api/mobile_secure [R=301,L]
+RewriteRule ^admin/?$ /selfie_booth/api/admin_secure [R=301,L]
 
 # Default route - require authentication
-RewriteRule ^/?$ /selfie_booth/index.html [R=301,L]
+RewriteRule ^/?$ /selfie_booth/api/kiosk_secure [R=301,L]
 
 # ============ Security Headers ============
 <IfModule mod_headers.c>
