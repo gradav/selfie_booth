@@ -244,6 +244,35 @@ def kiosk_logout():
     session.pop('kiosk', None)
     return redirect('/selfie_booth/api/kiosk/login')
 
+# ============ Page Routes ============
+
+@app.route('/selfie_booth/')
+@app.route('/selfie_booth/index.html')
+def kiosk_page():
+    """Serve kiosk page through Flask (requires authentication)"""
+    if not is_kiosk_logged_in():
+        return redirect('/selfie_booth/api/kiosk/login')
+    
+    # Serve the static index.html file
+    try:
+        with open(os.path.join(os.path.dirname(current_dir), 'index.html'), 'r') as f:
+            return f.read()
+    except FileNotFoundError:
+        return "Kiosk page not found", 404
+
+@app.route('/selfie_booth/admin.html')
+def admin_page():
+    """Serve admin page through Flask (requires authentication)"""
+    if not is_admin_logged_in():
+        return redirect('/selfie_booth/api/admin/login')
+    
+    # Serve the static admin.html file
+    try:
+        with open(os.path.join(os.path.dirname(current_dir), 'admin.html'), 'r') as f:
+            return f.read()
+    except FileNotFoundError:
+        return "Admin page not found", 404
+
 # ============ Core API Endpoints ============
 
 @app.route('/')
