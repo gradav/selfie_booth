@@ -10,7 +10,8 @@ import json
 import base64
 from datetime import datetime
 from io import BytesIO
-from flask import redirect, request, url_for
+from flask import redirect, request, url_for, session
+import time
 
 # Add current directory to path
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -42,6 +43,35 @@ else:
 # Basic configuration
 app.config['SECRET_KEY'] = 'selfie-booth-secret-key-change-in-production'
 app.config['DEBUG'] = False
+
+# Session timeout 
+ADMIN_SESSION_TIMEOUT = 7200
+
+# Environment variables for auth
+ADMIN_PASSWORD = os.environ.get('ADMIN_PASSWORD', 'admin123')
+KIOSK_USERNAME = os.environ.get('KIOSK_USERNAME', 'kiosk')  
+KIOSK_PASSWORD = os.environ.get('KIOSK_PASSWORD', 'kiosk123')
+
+def is_admin_logged_in():
+    """Check if admin is logged in and session hasn't expired"""
+    try:
+        if not session.get('admin'):
+            return False
+        login_time = session.get('admin_login_time', 0)
+        if time.time() - login_time > ADMIN_SESSION_TIMEOUT:
+            session.pop('admin', None)
+            session.pop('admin_login_time', None)
+            return False
+        return True
+    except Exception:
+        return False
+
+def is_kiosk_logged_in():
+    """Check if kiosk is logged in"""
+    try:
+        return session.get('kiosk') is not None
+    except Exception:
+        return False
 
 # In-memory session storage (for simple cross-device communication)
 active_sessions = {}
@@ -599,6 +629,56 @@ def get_image():
         image_bytes = f.read()
         image_b64 = base64.b64encode(image_bytes).decode('utf-8')
     return jsonify({'success': True, 'ready': True, 'image_data': f'data:image/jpeg;base64,{image_b64}'}), 200
+
+# ============ Login Endpoints ============
+
+@app.route('/admin/login', methods=['GET', 'POST'])
+def admin_login():
+    """Admin login"""
+    if request.method == 'GET':
+        return f'''<!DOCTYPE html>
+<html><head><title>Admin Login</title>
+<style>body{{font-family:Arial;background:#667eea;padding:50px;}}
+.container{{background:white;padding:40px;border-radius:15px;max-width:400px;margin:0 auto;}}
+input{{width:100%;padding:12px;margin:10px 0;border:1px solid #ddd;border-radius:5px;box-sizing:border-box;}}
+button{{width:100%;padding:15px;background:#667eea;color:white;border:none;border-radius:5px;font-size:16px;}}</style>
+</head><body><div class="container"><h2>Admin Login</h2>
+<p>Password: <code>{ADMIN_PASSWORD}</code></p>
+<form method="POST"><input type="password" name="password" required><button type="submit">Login</button></form>
+</div></body></html>'''
+    
+    password = request.form.get('password', '')
+    if password == ADMIN_PASSWORD:
+        session['admin'] = True
+        session['admin_login_time'] = time.time()
+        session.permanent = True
+        return redirect('/selfie_booth/admin.html')
+    else:
+        return redirect('/selfie_booth/api/admin/login?error=Invalid')
+
+@app.route('/kiosk/login', methods=['GET', 'POST'])
+def kiosk_login():
+    """Kiosk login"""
+    if request.method == 'GET':
+        return f'''<!DOCTYPE html>
+<html><head><title>Kiosk Login</title>
+<style>body{{font-family:Arial;background:#667eea;padding:50px;}}
+.container{{background:white;padding:40px;border-radius:15px;max-width:400px;margin:0 auto;}}
+input{{width:100%;padding:12px;margin:10px 0;border:1px solid #ddd;border-radius:5px;box-sizing:border-box;}}
+button{{width:100%;padding:15px;background:#667eea;color:white;border:none;border-radius:5px;font-size:16px;}}</style>
+</head><body><div class="container"><h2>Kiosk Login</h2>
+<p>Username: <code>{KIOSK_USERNAME}</code><br>Password: <code>{KIOSK_PASSWORD}</code></p>
+<form method="POST"><input type="text" name="username" required><input type="password" name="password" required><button type="submit">Login</button></form>
+</div></body></html>'''
+    
+    username = request.form.get('username', '')
+    password = request.form.get('password', '')
+    if username == KIOSK_USERNAME and password == KIOSK_PASSWORD:
+        session['kiosk'] = username
+        session.permanent = True
+        return redirect('/selfie_booth/index.html')
+    else:
+        return redirect('/selfie_booth/api/kiosk/login?error=Invalid')
 
 # ============ Admin Endpoints (Placeholders) ============
 
