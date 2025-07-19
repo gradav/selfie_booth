@@ -53,7 +53,7 @@ else:
         return response
 
 # Basic configuration - Use environment variable for secret key
-app.config['SECRET_KEY'] = os.environ.get('FLASK_SECRET_KEY', 'selfie-booth-secret-key-change-in-production')
+app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', os.environ.get('FLASK_SECRET_KEY', 'selfie-booth-secret-key-change-in-production'))
 app.config['DEBUG'] = False
 app.config['SESSION_COOKIE_SECURE'] = True  # Require HTTPS for cookies
 app.config['SESSION_COOKIE_HTTPONLY'] = True  # Prevent XSS access to cookies
