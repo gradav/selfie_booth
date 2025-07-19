@@ -524,7 +524,7 @@ def verify():
                 'data': {
                     'verified': True,
                     'message': 'Verification successful!',
-                    'redirect': 'photo.html'
+                    'redirect': 'photo-review.html'
                 }
             }), 200
         else:
