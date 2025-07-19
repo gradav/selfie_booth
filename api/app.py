@@ -920,7 +920,7 @@ def admin_history():
 
 # ============ Kiosk Management API ============
 
-@app.route('/kiosk/status')
+@app.route('/selfie_booth/kiosk/status')
 def kiosk_status():
     """Get status of all kiosks"""
     try:
@@ -935,7 +935,7 @@ def kiosk_status():
             'error': f'Failed to get kiosk status: {str(e)}'
         }), 500
 
-@app.route('/kiosk/checkout', methods=['POST', 'OPTIONS'])
+@app.route('/selfie_booth/kiosk/checkout', methods=['POST', 'OPTIONS'])
 def kiosk_checkout():
     """Checkout a specific kiosk"""
     if request.method == 'OPTIONS':
@@ -990,7 +990,7 @@ def kiosk_checkout():
             'error': f'Checkout failed: {str(e)}'
         }), 500
 
-@app.route('/kiosk/checkin', methods=['POST', 'OPTIONS'])
+@app.route('/selfie_booth/kiosk/checkin', methods=['POST', 'OPTIONS'])
 def kiosk_checkin():
     """Check in / release a kiosk"""
     if request.method == 'OPTIONS':

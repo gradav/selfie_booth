@@ -1,9 +1,54 @@
 # DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION BEGIN
 PassengerAppRoot "/home/n99fc05/lockhartlovesyou.com/selfie_booth/api"
-PassengerBaseURI "/selfie_booth/api"
+PassengerBaseURI "/selfie_booth"
 PassengerPython "/home/n99fc05/virtualenv/lockhartlovesyou.com/selfie_booth/api/3.9/bin/python"
-PassengerAppLogFile "/home/n99fc05/logs/bigtest3.log"
 # DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION END
 
-# Route main selfie_booth path to Flask for authentication
-PassengerBaseURI "/selfie_booth"
+
+########## EVERYTING BELOW HERE WAS PREVIOUSLY UNCOMMENTED. So anything with one # was previously uncommented and anything with two ##s was of course still commented out but with only one #.
+################################################################################
+# # DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION BEGIN
+# PassengerAppRoot "/home/n99fc05/lockhartlovesyou.com/selfie_booth/api"
+# PassengerBaseURI "/selfie_booth/api"
+# PassengerPython "/home/n99fc05/virtualenv/lockhartlovesyou.com/selfie_booth/api/3.9/bin/python"
+# # DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION END
+# # InMotion-Compatible .htaccess for Selfie Booth
+# # Fixed version - removed conflicting API routing
+
+# # Enable URL rewriting
+# RewriteEngine On
+
+# # REMOVED: RewriteRule ^api/(.*)$ api/app.py/$1 [QSA,L]
+# # ↑ This was conflicting with Passenger configuration
+
+# # Short URL redirects for tablets
+# #RewriteRule ^1/?$ mobile.html?tablet_id=TABLET1&location=lobby [R=302,L]
+# #RewriteRule ^2/?$ mobile.html?tablet_id=TABLET2&location=entrance [R=302,L]
+# #RewriteRule ^3/?$ mobile.html?tablet_id=TABLET3&location=event_hall [R=302,L]
+# #RewriteRule ^4/?$ mobile.html?tablet_id=TABLET4&location=party_room [R=302,L]
+
+# RewriteEngine On
+
+# # Dynamic kiosk routing - redirect to mobile.html with dynamic tablet assignment
+# # This avoids ModSecurity issues by using direct redirects instead of PHP
+# RewriteRule ^([0-9]+)/?$ /selfie_booth/mobile.html?tablet_id=TABLET$1&location=kiosk_$1&kiosk_id=$1 [R=302,L]
+
+# # Legacy URL support
+# RewriteRule ^mobile/?$ mobile.html [L]
+# RewriteRule ^verify/?$ verify.html [L]
+# RewriteRule ^photo/?$ photo.html [L]
+# RewriteRule ^admin/?$ admin.html [L]
+
+# # Default route - serve kiosk display for root access
+# RewriteRule ^/?$ index.html [L]
+
+# # Basic security - block access to sensitive files (but allow Passenger to handle API)
+# # Updated to exclude /api/ directory from this rule
+# RewriteCond %{REQUEST_URI} !^/api/
+# RewriteRule \.(env|log|py|pyc|pyo|ini|conf|bak)$ - [F,L]
+
+# # Remove trailing slashes (clean URLs) - but exclude /api/
+# RewriteCond %{REQUEST_FILENAME} !-d
+# RewriteCond %{REQUEST_URI} (.+)/$
+# RewriteCond %{REQUEST_URI} !^/api/
+# RewriteRule ^(.+)/$ /$1 [R=301,L]
